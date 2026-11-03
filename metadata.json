@@ -1,0 +1,6 @@
+{
+  "name": "롯데하이마트 경기광주점 고객 전용 맞춤 견적 뷰어",
+  "description": "문자 및 카카오톡 전용 비교 견적 열람 미니 웹앱 (업무용 데이터 0% 완전 분리)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

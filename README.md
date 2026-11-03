@@ -1,11 +1,9 @@
-<div align="center">
+# 롯데하이마트 경기광주점 고객 전용 견적 뷰어 (미니 웹앱)
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+본 프로젝트는 **업무용 코드·수당 단가표·고객 CRM 데이터가 단 1줄도 포함되지 않은 100% 고객 열람 전용 미니 웹앱**입니다.
 
-  <h1>Built with AI Studio</h2>
-
-  <p>The fastest path from prompt to production with Gemini.</p>
-
-  <a href="https://aistudio.google.com/apps">Start building</a>
-
-</div>
+## 배포 및 연동 방법 (최초 1회)
+1. 깃허브(GitHub)에서 새 저장소(예: `quote-view`)를 Public으로 생성한 뒤 이 압축파일의 내용물을 업로드합니다.
+2. 저장소 **Settings ➔ Pages ➔ Build and deployment ➔ Source**를 **GitHub Actions**로 선택하면 약 1분 뒤 전용 주소(`https://아이디.github.io/quote-view`)가 생성됩니다.
+3. 기존에 사용하시는 **통합관리앱**의 `[문자·카톡 비교 견적 단축링크 발송]` 창을 열고, 상단 **고객 전용 미니 뷰어 주소** 칸에 위 주소를 붙여넣어 **[저장]**을 누르면 설정이 끝납니다.
+4. 이후 통합관리앱에서 복사·발송하는 모든 문자/카톡 단축 링크는 자동으로 이 미니 뷰어 주소로만 연결되며, 본래 통합관리앱 주소는 절대 노출되지 않습니다.
