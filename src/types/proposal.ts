@@ -44,6 +44,24 @@ export const GENERAL_CARD_OPTIONS: GeneralCardType[] = [
   '미정',
 ];
 
+export const AFFILIATE_GENERAL_CARD_OPTIONS: GeneralCardType[] = [
+  '롯데 제휴카드',
+  '삼성 제휴카드',
+  '신한 제휴카드',
+  '우리 제휴카드',
+];
+
+export function isAffiliateGeneralCardType(
+  card?: string | null
+): card is GeneralCardType {
+  return (
+    card === '롯데 제휴카드' ||
+    card === '삼성 제휴카드' ||
+    card === '신한 제휴카드' ||
+    card === '우리 제휴카드'
+  );
+}
+
 export const GENERAL_CATEGORY_PRESETS = [
   '냉장고',
   '김치냉장고',
@@ -77,7 +95,8 @@ export interface GeneralHiPreedPlanSpec {
   maturityRefund: number; // 4,950,000 | 9,900,000 | 14,850,000 | 19,800,000
 }
 
-export const MAX_GENERAL_HIPREED_ACCOUNTS = 6;
+export const MAX_GENERAL_HIPREED_ACCOUNTS = 8;
+export const MAX_LIFECARE_TOTAL_ACCOUNTS = 8;
 
 export const GENERAL_HIPREED_PLANS: GeneralHiPreedPlanSpec[] = [
   {
@@ -205,7 +224,7 @@ export function calculateAutoTierCashback(
   payPrice: number,
   cardType: GeneralCardType
 ): number {
-  if (cardType === '미정') return 0;
+  if (cardType === '미정' || cardType === '일반카드') return 0;
   if (payPrice >= 20000000) return 1000000;
   if (payPrice >= 15000000) return 750000;
   if (payPrice >= 12000000) return 600000;
@@ -881,8 +900,8 @@ export const MAX_HI_PLUS_ACCOUNTS = 8;
 export const AFFILIATE_CARDS: AffiliateCardSpec[] = [
   {
     id: 'woori',
-    name: '우리제휴카드',
-    shortName: '우리카드',
+    name: '우리 제휴카드',
+    shortName: '우리 제휴카드',
     benefitType: '청구할인',
     tiers: [
       { id: 'woori-30', minSpendLabel: '전월 실적 30만원 이상', minSpendShort: '30만원', monthlyDiscount: 18000 },
@@ -892,8 +911,8 @@ export const AFFILIATE_CARDS: AffiliateCardSpec[] = [
   },
   {
     id: 'lotte',
-    name: '롯데제휴카드',
-    shortName: '롯데카드',
+    name: '롯데 제휴카드',
+    shortName: '롯데 제휴카드',
     benefitType: '캐시백',
     tiers: [
       { id: 'lotte-30', minSpendLabel: '전월 실적 30만원 이상', minSpendShort: '30만원', monthlyDiscount: 18000 },
@@ -903,8 +922,8 @@ export const AFFILIATE_CARDS: AffiliateCardSpec[] = [
   },
   {
     id: 'samsung',
-    name: '삼성제휴카드',
-    shortName: '삼성카드',
+    name: '삼성 제휴카드',
+    shortName: '삼성 제휴카드',
     benefitType: '청구할인',
     tiers: [
       { id: 'samsung-30', minSpendLabel: '전월 실적 30만원 이상', minSpendShort: '30만원', monthlyDiscount: 13000 },
@@ -914,8 +933,8 @@ export const AFFILIATE_CARDS: AffiliateCardSpec[] = [
   },
   {
     id: 'shinhan',
-    name: '신한제휴카드',
-    shortName: '신한카드',
+    name: '신한 제휴카드',
+    shortName: '신한 제휴카드',
     benefitType: '캐시백',
     tiers: [
       { id: 'shinhan-50', minSpendLabel: '전월 실적 50만원 이상', minSpendShort: '50만원', monthlyDiscount: 10000 },
