@@ -270,7 +270,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                   <div className="text-xs text-stone-400 font-bold">
                     모든 할인·캐시백·지원금 반영 시 최종 체감가
                   </div>
-                  <div className="text-3xl sm:text-4xl font-black text-amber-300 mt-0.5">
+                  <div className="text-2xl sm:text-4xl font-black text-amber-300 mt-0.5">
                     <SpringNumberFlow value={generalSummary.rawNet} suffix="원" />
                   </div>
                 </div>
@@ -622,7 +622,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                       >
                         <div>
                           <div className="text-[11px] font-black">{plan.buttonLabel}</div>
-                          <div className="text-[10px] font-bold text-rose-600 font-mono">
+                          <div className="text-[9.5px] sm:text-[10px] font-bold text-rose-600 font-mono truncate">
                             월 -{(unitSupport / 1000).toLocaleString()}천원
                           </div>
                         </div>
@@ -714,7 +714,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
       </main>
 
       {/* ==================== 하단 엄지 영역 고정 컨버전 독 (Smart Thumb-Zone Dock) ==================== */}
-      <div className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#D6D0C4] px-3.5 py-2.5 shadow-2xl">
+      <div className="safe-bottom-dock fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#D6D0C4] px-3 sm:px-3.5 pt-2.5 shadow-2xl">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-2.5">
           <div className="min-w-0">
             <div className="text-[10px] font-bold text-[#78716C] truncate">
@@ -745,7 +745,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
             {cleanPhone && (
               <a
                 href={`sms:${cleanPhone}?body=${smsBody}`}
-                className="px-3.5 py-2.5 rounded-2xl bg-[#F4ECE1] hover:bg-[#EAE0D0] text-[#6E4423] border border-[#D8C3A8] text-xs font-black inline-flex items-center gap-1.5 schedule-tactile"
+                className="px-2.5 sm:px-3.5 py-2.5 rounded-2xl bg-[#F4ECE1] hover:bg-[#EAE0D0] text-[#6E4423] border border-[#D8C3A8] text-xs font-black inline-flex items-center gap-1 sm:gap-1.5 schedule-tactile whitespace-nowrap"
               >
                 <MessageSquare className="w-4 h-4" />
                 <span>문자 문의</span>
@@ -755,7 +755,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
             {cleanPhone ? (
               <a
                 href={`tel:${cleanPhone}`}
-                className="px-4 py-2.5 rounded-2xl bg-[#18181B] hover:bg-stone-800 text-white text-xs sm:text-sm font-black inline-flex items-center gap-1.5 shadow-md schedule-tactile"
+                className="px-3 sm:px-4 py-2.5 rounded-2xl bg-[#18181B] hover:bg-stone-800 text-white text-xs sm:text-sm font-black inline-flex items-center gap-1 sm:gap-1.5 shadow-md schedule-tactile whitespace-nowrap"
               >
                 <Phone className="w-4 h-4 text-amber-400" />
                 <span>담당자 바로 통화</span>
