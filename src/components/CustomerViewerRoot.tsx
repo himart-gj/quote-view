@@ -22,6 +22,7 @@ import {
   SharedQuotePayload,
 } from '../utils/viewerQuoteDecoder';
 import { SpringNumberFlow } from './SpringNumberFlow';
+import { safeCopyText } from '../utils/mobileQaRuntime';
 import {
   Check,
   ChevronDown,
@@ -881,7 +882,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
 
             {cleanPhone && (
               <a
-                href={`sms:${cleanPhone}?body=${smsBody}`}
+                href={`sms:${cleanPhone}${typeof navigator !== 'undefined' && /iPad|iPhone|iPod/i.test(navigator.userAgent) ? '&' : '?'}body=${smsBody}`}
                 className="px-2.5 sm:px-3.5 py-2.5 rounded-2xl bg-[#F4ECE1] hover:bg-[#EAE0D0] text-[#6E4423] border border-[#D8C3A8] text-xs font-black inline-flex items-center gap-1 sm:gap-1.5 schedule-tactile whitespace-nowrap"
               >
                 <MessageSquare className="w-4 h-4" />
@@ -901,11 +902,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
               <button
                 type="button"
                 onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(window.location.href);
-                  } catch {
-                    // ignore
-                  }
+                  await safeCopyText(window.location.href);
                 }}
                 className="px-4 py-2.5 rounded-2xl bg-[#18181B] text-white text-xs font-black inline-flex items-center gap-1.5"
               >

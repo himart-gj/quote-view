@@ -1,6 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CustomerViewerRoot } from './components/CustomerViewerRoot';
+import { installMobileViewportAndKeyboardGuard } from './utils/mobileQaRuntime';
 import './index.css';
 
-createRoot(document.getElementById('root')!).render(<CustomerViewerRoot />);
+const BootMiniViewer: React.FC = () => {
+  useEffect(() => installMobileViewportAndKeyboardGuard(), []);
+  return <CustomerViewerRoot />;
+};
+
+createRoot(document.getElementById('root')!).render(<BootMiniViewer />);

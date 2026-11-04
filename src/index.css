@@ -313,3 +313,37 @@ body {
     line-height: 1.35 !important;
   }
 }
+
+/* ==================== Mobile QA 9-Point Hardening (Notch / Keyboard / Fold Cover) ==================== */
+:root {
+  --kb-height: 0px;
+}
+
+.safe-top-header {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+.modal-kb-safe {
+  max-height: min(90dvh, calc(100dvh - var(--kb-height, 0px) - 12px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 가상 키보드가 올라왔을 때 하단 고정 독이 입력창을 가리지 않도록 자동 전환 */
+html[data-keyboard-open="true"] .safe-bottom-dock {
+  position: static !important;
+  box-shadow: none !important;
+}
+
+/* 갤럭시 Z 폴드 커버화면 등 초소형 폭(320px~359px) 텍스트 잘림·노치 완벽 방어 */
+@media screen and (max-width: 359px) {
+  header.safe-top-header {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  .modal-kb-safe {
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
+  }
+}
