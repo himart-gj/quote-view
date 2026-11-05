@@ -304,8 +304,23 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                 <div className="text-sm sm:text-base font-black font-mono mt-0.5">
                   {simState.quoteMode === 'subscription'
                     ? `월 ${plan1SubSummary.finalMonthlyFee.toLocaleString()}원`
+                    : simState.quoteMode === 'hybrid'
+                    ? `${(plan1Summary.rawNet + plan1SubSummary.finalTotalFee).toLocaleString()}원`
                     : `${plan1Summary.rawNet.toLocaleString()}원`}
                 </div>
+                {simState.quoteMode === 'subscription' &&
+                  (plan1SubSummary.totalSubCashback > 0 ||
+                    plan2SubSummary.totalSubCashback > 0) && (
+                    <div className="text-[10.5px] font-bold opacity-85 mt-0.5 font-mono">
+                      총 체감 {plan1SubSummary.finalTotalFee.toLocaleString()}원
+                    </div>
+                  )}
+                {simState.quoteMode === 'hybrid' && (
+                  <div className="text-[10.5px] font-bold opacity-85 mt-0.5 font-mono">
+                    일반 {Math.round(plan1Summary.rawNet / 10000)}만 + 월{' '}
+                    {plan1SubSummary.finalMonthlyFee.toLocaleString()}원
+                  </div>
+                )}
               </button>
 
               <button
@@ -323,8 +338,23 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                 <div className="text-sm sm:text-base font-black font-mono mt-0.5">
                   {simState.quoteMode === 'subscription'
                     ? `월 ${plan2SubSummary.finalMonthlyFee.toLocaleString()}원`
+                    : simState.quoteMode === 'hybrid'
+                    ? `${(plan2Summary.rawNet + plan2SubSummary.finalTotalFee).toLocaleString()}원`
                     : `${plan2Summary.rawNet.toLocaleString()}원`}
                 </div>
+                {simState.quoteMode === 'subscription' &&
+                  (plan1SubSummary.totalSubCashback > 0 ||
+                    plan2SubSummary.totalSubCashback > 0) && (
+                    <div className="text-[10.5px] font-bold opacity-85 mt-0.5 font-mono">
+                      총 체감 {plan2SubSummary.finalTotalFee.toLocaleString()}원
+                    </div>
+                  )}
+                {simState.quoteMode === 'hybrid' && (
+                  <div className="text-[10.5px] font-bold opacity-85 mt-0.5 font-mono">
+                    일반 {Math.round(plan2Summary.rawNet / 10000)}만 + 월{' '}
+                    {plan2SubSummary.finalMonthlyFee.toLocaleString()}원
+                  </div>
+                )}
               </button>
             </div>
           </div>
@@ -598,17 +628,30 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                   <div className="text-xs font-black text-emerald-400 font-mono">
                     매월 -
                     {(
-                      subSummary.cardDiscount +
-                      subSummary.hiPlusMonthly +
-                      subSummary.monthlyCashbackEquiv
+                      subSummary.cardDiscount + subSummary.hiPlusMonthly
                     ).toLocaleString()}
-                    원 체감 절감
+                    원 할인·지원
                   </div>
-                  {subSummary.totalSubCashback > 0 && (
-                    <div className="text-[10.5px] font-extrabold text-amber-300 mt-0.5">
-                      일시 캐시백 총 {subSummary.totalSubCashback.toLocaleString()}원 포함
-                    </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-white/10 border border-white/15 px-3.5 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-[11px] font-bold text-slate-200">
+                  {subSummary.totalSubCashback > 0 ? (
+                    <>
+                      🎁 1회 입금 캐시백{' '}
+                      <strong className="text-emerald-300 font-mono">
+                        -{subSummary.totalSubCashback.toLocaleString()}원
+                      </strong>{' '}
+                      일시 차감 반영
+                    </>
+                  ) : (
+                    <>🎯 최종 {subSummary.periodLabel} 체감가 합계</>
                   )}
+                </div>
+                <div className="text-sm sm:text-base font-black text-amber-300 font-mono">
+                  최종 {subSummary.periodLabel} 체감가{' '}
+                  <SpringNumberFlow value={subSummary.finalTotalFee} suffix="원" />
                 </div>
               </div>
             </div>
@@ -708,9 +751,10 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                   {subSummary.totalSubCashback > 0 && (
                     <div className="rounded-xl bg-emerald-50 border border-emerald-300 px-3 py-2 text-[11px] font-bold text-emerald-900 space-y-0.5">
                       <div>
-                        🎁 일시 지급 캐시백 총{' '}
+                        🎁 1회 일시 입금 캐시백 총{' '}
                         <strong>-{subSummary.totalSubCashback.toLocaleString()}원</strong> 적용됨
-                        (월 환산 -{subSummary.monthlyCashbackEquiv.toLocaleString()}원 체감)
+                        (최종 {subSummary.periodLabel} 체감가{' '}
+                        <strong>{subSummary.finalTotalFee.toLocaleString()}원</strong>에 차감 반영)
                       </div>
                       <div className="text-[10.5px] text-emerald-700">
                         {subSummary.subTierCashback > 0 &&
@@ -729,13 +773,14 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
               {/* 카드 미선택 상태에서 추가 캐시백만 있는 경우 표시 */}
               {!originSubAffiliateCard && subSummary.totalSubCashback > 0 && (
                 <div className="rounded-xl bg-emerald-50 border border-emerald-300 px-3 py-2 text-[11px] font-bold text-emerald-900">
-                  🎁 일시 지급 캐시백 총{' '}
+                  🎁 1회 일시 입금 캐시백 총{' '}
                   <strong>-{subSummary.totalSubCashback.toLocaleString()}원</strong> 적용됨
-                  (월 환산 -{subSummary.monthlyCashbackEquiv.toLocaleString()}원 체감)
+                  (최종 {subSummary.periodLabel} 체감가{' '}
+                  <strong>{subSummary.finalTotalFee.toLocaleString()}원</strong>에 차감 반영)
                 </div>
               )}
 
-              {/* [2] 라이프케어상품 결합 지원금 시뮬레이터 (구독 · 혼합 공통 최대 8개 제한) */}
+              {/* [2] 라이프케어상품 결합 지원금 시뮬레이터 (구독 · 혼합 최대 8개 제한) */}
               <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/50 p-3.5 space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -818,6 +863,41 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
           </section>
         )}
 
+        {/* 혼합 견적 모드: 일반구매 + 구독구매 최종 혜택가 통합 합계 카드 */}
+        {showGeneral && showSub && (
+          <section className="rounded-3xl bg-[#18181B] text-white p-5 space-y-2 shadow-md">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs font-extrabold text-amber-300">
+                🎯 일반구매 + 구독구매 최종 혜택가 합계
+              </span>
+              <span className="text-[11px] font-bold text-slate-300 font-mono">
+                통합 총 혜택 -
+                {(
+                  generalSummary.totalDiscountAndBenefit + subSummary.totalSubBenefit
+                ).toLocaleString()}
+                원
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between gap-2 flex-wrap">
+              <div className="text-xs font-bold text-slate-300 leading-relaxed">
+                일반 체감 {generalSummary.rawNet.toLocaleString()}원 + 구독{' '}
+                {subSummary.periodLabel} 최종 체감 {subSummary.finalTotalFee.toLocaleString()}원
+                (월 {subSummary.finalMonthlyFee.toLocaleString()}원
+                {subSummary.totalSubCashback > 0
+                  ? ` · 1회 캐시백 -${subSummary.totalSubCashback.toLocaleString()}원 반영`
+                  : ''}
+                )
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono">
+                <SpringNumberFlow
+                  value={generalSummary.rawNet + subSummary.finalTotalFee}
+                  suffix="원"
+                />
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* 결합상품 필수 안내 아코디언 (공정위/소비자 안내 준수) */}
         <div className="rounded-2xl bg-white border border-[#E4DFD5] overflow-hidden">
           <button
@@ -862,6 +942,19 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
               {simState.quoteMode === 'subscription' ? (
                 <>
                   월 <SpringNumberFlow value={subSummary.finalMonthlyFee} suffix="원" />
+                  {subSummary.totalSubCashback > 0 && (
+                    <span className="ml-1 text-[11px] text-emerald-700">
+                      (총 {subSummary.finalTotalFee.toLocaleString()}원)
+                    </span>
+                  )}
+                </>
+              ) : simState.quoteMode === 'hybrid' ? (
+                <>
+                  통합{' '}
+                  <SpringNumberFlow
+                    value={generalSummary.rawNet + subSummary.finalTotalFee}
+                    suffix="원"
+                  />
                 </>
               ) : (
                 <SpringNumberFlow value={generalSummary.rawNet} suffix="원" />

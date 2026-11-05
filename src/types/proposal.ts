@@ -1,5 +1,5 @@
 export type QuoteMode = 'general' | 'subscription' | 'hybrid';
-export type AppStep = 'home' | 'input' | 'proposal' | 'pop-printer' | 'crm' | 'himobile' | 'insurance' | 'care-table' | 'lotte-plan' | 'allcare-guide';
+export type AppStep = 'home' | 'input' | 'proposal' | 'pop-printer' | 'crm' | 'himobile' | 'insurance' | 'care-table' | 'lotte-plan' | 'allcare-guide' | 'marketing-db';
 export type SubscriptionPeriod = 36 | 60;
 
 // ==================== 일반구매(일시불) 타입 ====================
@@ -690,22 +690,23 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
   const subExtraCashback = Math.max(0, Number(planData.subExtraCashback) || 0);
   const totalSubCashback = subTierCashback + subExtraCashback;
 
-  // 일시 캐시백의 대표 구독기간 월 환산 체감분
-  const monthlyCashbackEquiv =
-    representativePeriod > 0 && totalSubCashback > 0
-      ? Math.round(totalSubCashback / representativePeriod)
-      : 0;
+  // 일시 지급 캐시백(금액대별 캐시백 + 구독 추가 캐시백)은 1회 입금이므로
+  // 월환산으로 나누지 않고 최종 기간 총 체감가(finalTotalFee)에서만 일시 차감합니다.
+  const monthlyCashbackEquiv = 0;
 
-  // 실제 매월 청구·월지원 차감 후 금액 (일시 캐시백 제외 매월 실부담)
+  // 매월 실제 청구·월지원 차감 후 월 체감 구독료 (제휴카드 월 할인 + 구독프리드 월 지원금)
   const monthlyBillingAfterCardAndHiPlus =
     totalBaseMonthly - cardDiscount - hiPlusMonthly;
 
-  // 일시 캐시백 월 환산분까지 모두 반영한 최종 월 체감가
-  const finalMonthlyFee =
-    monthlyBillingAfterCardAndHiPlus - monthlyCashbackEquiv;
+  const finalMonthlyFee = monthlyBillingAfterCardAndHiPlus;
+
+  const totalMonthlyDiscountOverTerm =
+    (cardDiscount + hiPlusMonthly) * representativePeriod;
+  const totalTermBillingBeforeCashback =
+    totalPrincipal - totalMonthlyDiscountOverTerm;
 
   const totalSubBenefit =
-    (cardDiscount + hiPlusMonthly) * representativePeriod + totalSubCashback;
+    totalMonthlyDiscountOverTerm + totalSubCashback;
   const finalTotalFee = totalPrincipal - totalSubBenefit;
 
   const hasSubData =
@@ -739,6 +740,8 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
     totalSubCashback,
     monthlyCashbackEquiv,
     monthlyBillingAfterCardAndHiPlus,
+    totalMonthlyDiscountOverTerm,
+    totalTermBillingBeforeCashback,
     finalMonthlyFee,
     finalTotalFee,
     totalSubBenefit,
