@@ -493,7 +493,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                 아래 버튼을 눌러보시면 위 제안서의 결제가·최종 체감가가 실시간으로 변경됩니다
               </p>
             </div>
-            {isModifiedFromOriginal ? (
+            {isModifiedFromOriginal && (
               <button
                 type="button"
                 onClick={handleResetToOriginal}
