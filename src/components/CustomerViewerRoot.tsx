@@ -22,6 +22,7 @@ import {
   SharedQuotePayload,
 } from '../utils/viewerQuoteDecoder';
 import { SpringNumberFlow } from './SpringNumberFlow';
+import { CustomerProposalSheet } from './CustomerProposalSheet';
 import { safeCopyText } from '../utils/mobileQaRuntime';
 import {
   Check,
@@ -35,7 +36,6 @@ import {
   Phone,
   RotateCcw,
   ShieldCheck,
-  ShoppingBag,
   Sparkles,
   UserCheck,
 } from 'lucide-react';
@@ -87,6 +87,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
     simState.quoteMode === 'general' || simState.quoteMode === 'hybrid';
   const showSub =
     simState.quoteMode === 'subscription' || simState.quoteMode === 'hybrid';
+  const isHybrid = simState.quoteMode === 'hybrid';
 
   // 견적 발송 시 컨설턴트가 선택한 원본 제휴카드 파악 (1안 / 2안 각각 대응)
   const originPlanData = useMemo(() => {
@@ -111,7 +112,6 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
     return AFFILIATE_CARDS.find((c) => c.id === cid) || null;
   }, [originPlanData.selectedCardId]);
 
-  // 라이프케어상품 플랜 합산 수량 (단일 8개 가능 · 혼합 합산 최대 8개 제한)
   const combinedLifecareAccounts =
     (showGeneral ? generalHiPreed.totalAccounts : 0) +
     (showSub ? hiPlusSummary.totalAccounts : 0);
@@ -207,7 +207,6 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
     payload.consultant.roleTitle
   );
 
-  // 문자 상담 프리필 생성
   const cleanPhone = (payload.consultant.phone || '').replace(/[^0-9]/g, '');
   const smsBody = encodeURIComponent(
     `[${payload.consultant.storeName}] 안녕하세요 ${payload.consultant.name}님! 보내주신 맞춤 비교 견적서(${
@@ -215,11 +214,111 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
     }) 보고 연락드립니다.`
   );
 
+  // ==================== 통합앱 고객 제안서(ProposalPreview)와 동일한 텍스트·세부내역 빌더 ====================
+  const validGeneralNames = generalSummary.displayItems
+    .map((it) => (it.category || '').trim())
+    .filter(Boolean);
+  const generalHeaderTitle =
+    validGeneralNames.length === 0
+      ? '맞춤 가전 패키지 구매 제안서'
+      : validGeneralNames.length === 1
+      ? `${validGeneralNames[0]} 맞춤 구매 제안서`
+      : `${validGeneralNames[0]} 외 ${validGeneralNames.length - 1}건 맞춤 구매 제안서`;
+
+  const validSubNames = subSummary.displayItems
+    .map((it) => (it.category || '').trim())
+    .filter(Boolean);
+  const subHeaderTitle =
+    validSubNames.length === 0
+      ? `맞춤 가전 구독 제안서 (${subSummary.periodLabel} 구독)`
+      : validSubNames.length === 1
+      ? `${validSubNames[0]} 구독 제안서 (${subSummary.periodLabel} 구독)`
+      : `${validSubNames[0]} 외 ${validSubNames.length - 1}건 구독 제안서 (${subSummary.periodLabel} 구독)`;
+
+  const step1DiscountDetails: string[] = [];
+  if (generalSummary.instantDiscount > 0) {
+    step1DiscountDetails.push(
+      `기본 즉시할인 -${generalSummary.instantDiscount.toLocaleString()}원`
+    );
+  }
+  generalSummary.extraDiscountItems.forEach((it) => {
+    step1DiscountDetails.push(
+      `${it.description || '추가 즉시할인'} -${(Number(it.amount) || 0).toLocaleString()}원`
+    );
+  });
+  if (generalSummary.pointUsed > 0) {
+    step1DiscountDetails.push(
+      `포인트 즉시사용 -${generalSummary.pointUsed.toLocaleString()}원`
+    );
+  }
+
+  const step2CashbackDetails: string[] = [];
+  if (generalSummary.tierCashback > 0) {
+    step2CashbackDetails.push(
+      `금액대별 캐시백 -${generalSummary.tierCashback.toLocaleString()}원`
+    );
+  }
+  if (generalSummary.extraCashback > 0) {
+    step2CashbackDetails.push(
+      `배송익월 추가 캐시백 -${generalSummary.extraCashback.toLocaleString()}원`
+    );
+  }
+
+  const step2ExtraDetails: string[] = [];
+  generalSummary.extraEtcItems.forEach((it) => {
+    step2ExtraDetails.push(
+      `${it.description || '기타 추가혜택'} -${(Number(it.amount) || 0).toLocaleString()}원`
+    );
+  });
+  if (generalSummary.remainingPoints > 0) {
+    step2ExtraDetails.push(
+      `잔여 적립포인트 -${generalSummary.remainingPoints.toLocaleString()}P`
+    );
+  }
+
+  const currentCard = subSummary.currentCard;
+  const currentCardTier = subSummary.currentCardTier;
+  const subCardBenefitLabel =
+    currentCard?.benefitType === '캐시백' ||
+    currentCard?.id === 'lotte' ||
+    currentCard?.id === 'shinhan'
+      ? '캐시백'
+      : '청구할인';
+
+  const subCashbackDetailParts: string[] = [];
+  if (subSummary.subTierCashback > 0) {
+    subCashbackDetailParts.push(
+      `${currentCard?.shortName || '제휴카드'} 금액대별 캐시백(원금 ${Math.floor(
+        subSummary.totalPrincipal / 10000
+      ).toLocaleString()}만원 구간) -${subSummary.subTierCashback.toLocaleString()}원`
+    );
+  }
+  if (subSummary.subExtraCashback > 0) {
+    subCashbackDetailParts.push(
+      `추가 캐시백 -${subSummary.subExtraCashback.toLocaleString()}원`
+    );
+  }
+
+  const subFormulaParts = ['월 구독료'];
+  if (subSummary.cardDiscount > 0) {
+    subFormulaParts.push(`제휴카드${subCardBenefitLabel}`);
+  }
+  if (subSummary.hiPlusMonthly > 0) {
+    subFormulaParts.push('구독프리드');
+  }
+  const subFormulaText = subFormulaParts.join(' ➖ ');
+
+  const hybridTotalDiscountAndSupport =
+    generalSummary.totalDiscountAndBenefit + subSummary.totalSubBenefit;
+  const hybridCombinedNetTotal = generalSummary.rawNet + subSummary.finalTotalFee;
+
+  const containerMaxW = isHybrid ? 'max-w-2xl md:max-w-4xl' : 'max-w-2xl';
+
   return (
     <div className="min-h-[100dvh] bg-[#F4F2ED] text-[#18181B] pb-28">
       {/* 상단 프리미엄 브랜드 바 */}
       <header className="sticky top-0 z-30 bg-[#18181B]/95 backdrop-blur-md text-white px-4 py-3 border-b border-white/10">
-        <div className="max-w-2xl mx-auto flex items-center justify-between gap-2">
+        <div className={`${containerMaxW} mx-auto flex items-center justify-between gap-2`}>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-amber-300">
               <Sparkles className="w-3.5 h-3.5 shrink-0" />
@@ -252,7 +351,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-3.5 sm:px-5 pt-4 space-y-4">
+      <main className={`${containerMaxW} mx-auto px-3 sm:px-5 pt-4 space-y-4`}>
         {/* 담당 컨설턴트 안심 인사 카드 */}
         <div className="rounded-3xl bg-white border border-[#E4DFD5] p-4 shadow-2xs flex items-start gap-3">
           <div className="w-11 h-11 rounded-2xl bg-[#8C5A32] text-white font-black text-base flex items-center justify-center shrink-0">
@@ -276,7 +375,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
           </div>
         </div>
 
-        {/* [킬러 기능 1] 1안 vs 2안 원터치 비교 스위치 (둘 다 있을 때 자동 노출) */}
+        {/* 1안 vs 2안 원터치 비교 스위치 (둘 다 있을 때 자동 노출) */}
         {hasBothPlans && (
           <div className="rounded-3xl bg-[#18181B] text-white p-3.5 space-y-2.5 shadow-md">
             <div className="flex items-center justify-between text-xs font-black">
@@ -360,138 +459,65 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
           </div>
         )}
 
-        {/* ==================== A. 일반구매 패키지 & 인터랙티브 시뮬레이터 ==================== */}
-        {showGeneral && (
-          <section className="rounded-3xl bg-white border border-[#E4DFD5] overflow-hidden shadow-xs">
-            {/* 상단 최종 체감가 히어로 스테이지 */}
-            <div className="bg-gradient-to-br from-[#18181B] to-[#292524] text-white p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 text-xs font-black">
-                  맞춤 구매 최대 혜택가
-                </span>
-                <span className="text-xs font-bold text-stone-300">
-                  총 혜택{' '}
-                  <strong className="text-emerald-400 font-mono">
-                    -{generalSummary.totalDiscountAndBenefit.toLocaleString()}원
-                  </strong>
-                </span>
-              </div>
+        <CustomerProposalSheet
+          activePlan={activePlan}
+          currentCard={currentCard}
+          currentCardTier={currentCardTier}
+          generalHeaderTitle={generalHeaderTitle}
+          generalHiPreed={generalHiPreed}
+          generalSummary={generalSummary}
+          hasBothPlans={hasBothPlans}
+          hiPlusSummary={hiPlusSummary}
+          hybridCombinedNetTotal={hybridCombinedNetTotal}
+          hybridTotalDiscountAndSupport={hybridTotalDiscountAndSupport}
+          simState={simState}
+          step1DiscountDetails={step1DiscountDetails}
+          step2CashbackDetails={step2CashbackDetails}
+          step2ExtraDetails={step2ExtraDetails}
+          subCardBenefitLabel={subCardBenefitLabel}
+          subCashbackDetailParts={subCashbackDetailParts}
+          subFormulaText={subFormulaText}
+          subHeaderTitle={subHeaderTitle}
+          subSummary={subSummary}
+        />
 
-              <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                <div>
-                  <div className="text-xs text-stone-400 font-bold">
-                    모든 할인·캐시백·지원금 반영 시 최종 체감가
-                  </div>
-                  <div className="text-2xl sm:text-4xl font-black text-amber-300 mt-0.5">
-                    <SpringNumberFlow value={generalSummary.rawNet} suffix="원" />
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[11px] text-stone-400 font-bold">
-                    행사가 합계 {generalSummary.sum.toLocaleString()}원
-                  </div>
-                  <div className="text-sm font-black text-white font-mono">
-                    실결제가 <SpringNumberFlow value={generalSummary.payPrice} suffix="원" />
-                  </div>
-                </div>
+        {/* ==================== 고객 직접 비교용 인터랙티브 혜택 시뮬레이터 (위 제안서 수치와 실시간 연동) ==================== */}
+        <section className="rounded-3xl bg-white border border-[#E4DFD5] p-4 sm:p-5 space-y-4 shadow-2xs">
+          <div className="flex items-center justify-between gap-2 border-b border-[#EFECE6] pb-2.5">
+            <div>
+              <div className="text-xs sm:text-sm font-black text-[#18181B] flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-[#8C5A32]" />
+                <span>조건 직접 비교해보기 (제휴카드 · 라이프케어 시뮬레이터)</span>
               </div>
+              <p className="text-[11px] font-bold text-[#78716C] mt-0.5">
+                아래 버튼을 눌러보시면 위 제안서의 결제가·최종 체감가가 실시간으로 변경됩니다
+              </p>
             </div>
+            {isModifiedFromOriginal ? (
+              <button
+                type="button"
+                onClick={handleResetToOriginal}
+                className="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-black shrink-0 cursor-pointer"
+              >
+                원래 제안 복귀
+              </button>
+            )}
+          </div>
 
-            <div className="p-4 sm:p-5 space-y-4">
-              {/* 구성 품목 리스트 */}
-              <div className="space-y-2">
-                <div className="text-xs font-black text-[#78716C] flex items-center gap-1.5">
-                  <ShoppingBag className="w-3.5 h-3.5 text-[#8C5A32]" />
-                  <span>선택하신 가전 구성 품목</span>
-                </div>
-                <div className="space-y-1.5">
-                  {generalSummary.displayItems.map((it, idx) => {
-                    const lineAmt =
-                      (Number(it.unitPrice) || 0) *
-                      Math.max(1, Number(it.quantity) || 1);
-                    return (
-                      <div
-                        key={it.id || idx}
-                        className="rounded-2xl bg-[#FAF8F4] border border-[#E4DFD5] px-3.5 py-2.5 flex items-center justify-between gap-2"
-                      >
-                        <div className="min-w-0">
-                          <div className="text-xs sm:text-sm font-black truncate">
-                            {it.category || `품목 ${idx + 1}`}{' '}
-                            {it.quantity > 1 && (
-                              <span className="text-[#8C5A32]">×{it.quantity}</span>
-                            )}
-                          </div>
-                          {it.modelName && (
-                            <div className="text-[11px] font-mono text-[#78716C]">
-                              {it.modelName}
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-xs sm:text-sm font-black font-mono shrink-0">
-                          {lineAmt.toLocaleString()}원
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 혜택 단계별 차감 요약 */}
-              <div className="rounded-2xl bg-[#FAF8F4] border border-[#E4DFD5] p-3.5 space-y-2 text-xs">
-                <div className="flex justify-between font-bold">
-                  <span className="text-[#78716C]">1단계 즉시할인·포인트 차감</span>
-                  <span className="font-mono font-black text-blue-600">
-                    -{generalSummary.totalStep1InstantDiscount.toLocaleString()}원
-                  </span>
-                </div>
-                {generalSummary.hiFreedSupport > 0 && (
-                  <div className="flex justify-between font-bold">
-                    <span className="text-[#78716C]">
-                      라이프케어 결합 즉시지원 ({generalHiPreed.comboLabel})
-                    </span>
-                    <span className="font-mono font-black text-rose-600">
-                      -{generalSummary.hiFreedSupport.toLocaleString()}원
-                    </span>
-                  </div>
-                )}
-                {generalSummary.totalStep2Cashback > 0 && (
-                  <div className="flex justify-between font-bold">
-                    <span className="text-[#78716C]">
-                      제휴카드 금액대·익월 캐시백 (
-                      {isAffiliateGeneralCardType(simState.generalCardType)
-                        ? simState.generalCardType
-                        : originGeneralAffiliateCard || '제휴카드'}
-                      )
-                    </span>
-                    <span className="font-mono font-black text-emerald-700">
-                      -{generalSummary.totalStep2Cashback.toLocaleString()}원
-                    </span>
-                  </div>
-                )}
-                {generalSummary.totalStep2ExtraBenefit > 0 && (
-                  <div className="flex justify-between font-bold">
-                    <span className="text-[#78716C]">추가 사은·적립 포인트 혜택</span>
-                    <span className="font-mono font-black text-amber-700">
-                      -{generalSummary.totalStep2ExtraBenefit.toLocaleString()}원
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* [1] 직접 눌러보는 결제카드 (견적 발송 시 선택한 제휴카드 종류만 노출) */}
-              {originGeneralAffiliateCard && (
-                <div className="rounded-2xl border-2 border-[#D8C3A8] bg-[#FAF5EC] p-3.5 space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-black text-[#6E4423] flex items-center gap-1.5">
-                      <CreditCard className="w-3.5 h-3.5 shrink-0" />
-                      <span>직접 눌러보는 결제카드 (선택 제휴카드)</span>
-                    </span>
-                    <span className="text-[10px] font-bold text-[#8C5A32] shrink-0">
-                      터치 시 혜택 비교
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-wrap">
+          <div className={isHybrid ? 'grid grid-cols-1 md:grid-cols-2 gap-3.5' : 'space-y-3.5'}>
+            {showGeneral && (
+              <div className="space-y-3">
+                {originGeneralAffiliateCard && (
+                  <div className="rounded-2xl border border-[#D8C3A8] bg-[#FAF5EC] p-3.5 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-black text-[#6E4423] flex items-center gap-1.5">
+                        <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                        <span>일반구매 결제카드 혜택 ON/OFF</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-[#8C5A32]">
+                        터치 시 비교
+                      </span>
+                    </div>
                     <button
                       type="button"
                       onClick={() =>
@@ -505,7 +531,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                       }
                       className={`px-3 py-1.5 rounded-xl text-xs font-black border inline-flex items-center gap-1.5 cursor-pointer schedule-tactile ${
                         simState.generalCardType === originGeneralAffiliateCard
-                          ? 'bg-[#18181B] text-white border-[#18181B] shadow-2xs'
+                          ? 'bg-[#18181B] text-white border-[#18181B]'
                           : 'bg-white text-[#57534E] border-[#DFD6C7]'
                       }`}
                     >
@@ -515,188 +541,101 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                       <span>{originGeneralAffiliateCard}</span>
                     </button>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* [2] 라이프케어상품 결합 지원금 시뮬레이터 (최대 8개 제한) */}
-              <div className="rounded-2xl border-2 border-[#D8C3A8] bg-[#FAF5EC] p-3.5 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-xs sm:text-[13px] font-black text-[#6E4423] flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                      <span>라이프케어상품 결합 지원금 시뮬레이터</span>
+                <div className="rounded-2xl border border-[#D8C3A8] bg-[#FAF5EC] p-3.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-black text-[#6E4423] flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                        <span>일반 라이프케어(하이프리드) 결합 시뮬레이터</span>
+                      </div>
+                      <p className="text-[10.5px] font-bold text-[#8C5A32] mt-0.5">
+                        중복 상관없이 최대 8개 플랜 가입 가능
+                      </p>
                     </div>
-                    <p className="text-[11px] font-bold text-[#8C5A32] mt-0.5">
-                      중복상관없이 최대 8개 플랜 가입가능
-                    </p>
+                    <span className="px-2 py-0.5 rounded-full bg-white border border-[#D8C3A8] text-[10.5px] font-black text-[#6E4423] shrink-0">
+                      {isHybrid
+                        ? `합산 ${combinedLifecareAccounts}/8개`
+                        : `${generalHiPreed.totalAccounts}/8개`}
+                    </span>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-white border border-[#D8C3A8] text-[10.5px] font-black text-[#6E4423] shrink-0">
-                    {simState.quoteMode === 'hybrid'
-                      ? `합산 ${combinedLifecareAccounts}/8개`
-                      : `${generalHiPreed.totalAccounts}/8개`}
-                  </span>
-                </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  {GENERAL_HIPREED_PLANS.map((plan) => {
-                    const cnt = simState.generalHiPreedCounts[plan.id] || 0;
-                    return (
-                      <div
-                        key={plan.id}
-                        className={`rounded-xl border p-2.5 flex items-center justify-between ${
-                          cnt > 0
-                            ? 'bg-white border-[#8C5A32] shadow-2xs'
-                            : 'bg-white/70 border-[#E4DFD5]'
-                        }`}
-                      >
-                        <div>
-                          <div className="text-xs font-black">{plan.name}</div>
-                          <div className="text-[10px] font-bold text-rose-600 font-mono">
-                            -{(plan.supportAmount / 10000).toLocaleString()}만원 지원
+                  <div className="grid grid-cols-2 gap-2">
+                    {GENERAL_HIPREED_PLANS.map((plan) => {
+                      const cnt = simState.generalHiPreedCounts[plan.id] || 0;
+                      return (
+                        <div
+                          key={plan.id}
+                          className={`rounded-xl border p-2.5 flex items-center justify-between ${
+                            cnt > 0
+                              ? 'bg-white border-[#8C5A32] shadow-2xs'
+                              : 'bg-white/70 border-[#E4DFD5]'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-xs font-black">{plan.name}</div>
+                            <div className="text-[10px] font-bold text-rose-600 font-mono">
+                              -{(plan.supportAmount / 10000).toLocaleString()}만원 지원
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={cnt === 0}
+                              onClick={() => handleAdjustHiPreed(plan.id, -1)}
+                              className="w-6 h-6 rounded-lg bg-[#F4F2ED] font-black text-xs cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+                            >
+                              -
+                            </button>
+                            <span className="text-xs font-black font-mono w-4 text-center">
+                              {cnt}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={!canAddMoreLifecare}
+                              onClick={() => handleAdjustHiPreed(plan.id, 1)}
+                              className="w-6 h-6 rounded-lg bg-[#18181B] text-white font-black text-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              +
+                            </button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            disabled={cnt === 0}
-                            onClick={() => handleAdjustHiPreed(plan.id, -1)}
-                            className="w-6 h-6 rounded-lg bg-[#F4F2ED] font-black text-xs cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
-                          >
-                            -
-                          </button>
-                          <span className="text-xs font-black font-mono w-4 text-center">
-                            {cnt}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={!canAddMoreLifecare}
-                            onClick={() => handleAdjustHiPreed(plan.id, 1)}
-                            className="w-6 h-6 rounded-lg bg-[#18181B] text-white font-black text-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {generalHiPreed.totalAccounts > 0 && (
-                  <p className="text-[11px] font-bold text-[#6E4423] leading-relaxed">
-                    ✓ 만기(150회) 시 납입 원금{' '}
-                    <strong>
-                      {generalHiPreed.totalMaturityRefund.toLocaleString()}원 100% 전액 환급 (서비스 미이용 시)
-                    </strong>{' '}
-                    (월 납입금{' '}
-                    <strong>
-                      {generalHiPreed.totalMonthlyDeposit.toLocaleString()}원
-                    </strong>{' '}
-                    적립형)
-                  </p>
-                )}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* ==================== B. 가전 구독 패키지 & 인터랙티브 제휴카드/라이프케어 시뮬레이터 ==================== */}
-        {showSub && (
-          <section className="rounded-3xl bg-white border border-[#E4DFD5] overflow-hidden shadow-xs">
-            <div className="bg-gradient-to-br from-[#0F172A] to-[#1E293B] text-white p-5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="px-2.5 py-0.5 rounded-full bg-sky-400/20 text-sky-300 border border-sky-400/30 text-xs font-black">
-                  가전 구독 ({subSummary.periodLabel}) 케어 설계안
-                </span>
-                <span className="text-xs font-bold text-slate-300">
-                  무상 A/S · 정기 케어 포함
-                </span>
-              </div>
-
-              <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                <div>
-                  <div className="text-xs text-slate-400 font-bold">
-                    제휴카드·결합 혜택 적용 월 체감 구독료
+                      );
+                    })}
                   </div>
-                  <div className="text-3xl sm:text-4xl font-black text-sky-300 mt-0.5">
-                    월 <SpringNumberFlow value={subSummary.finalMonthlyFee} suffix="원" />
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-[11px] text-slate-400 font-bold">
-                    기본 월 구독료 {subSummary.totalBaseMonthly.toLocaleString()}원
-                  </div>
-                  <div className="text-xs font-black text-emerald-400 font-mono">
-                    매월 -
-                    {(
-                      subSummary.cardDiscount + subSummary.hiPlusMonthly
-                    ).toLocaleString()}
-                    원 할인·지원
-                  </div>
-                </div>
-              </div>
 
-              <div className="rounded-2xl bg-white/10 border border-white/15 px-3.5 py-2.5 flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-[11px] font-bold text-slate-200">
-                  {subSummary.totalSubCashback > 0 ? (
-                    <>
-                      🎁 1회 입금 캐시백{' '}
-                      <strong className="text-emerald-300 font-mono">
-                        -{subSummary.totalSubCashback.toLocaleString()}원
+                  {generalHiPreed.totalAccounts > 0 && (
+                    <p className="text-[11px] font-bold text-[#6E4423] leading-relaxed">
+                      ✓ 만기(150회) 시 납입 원금{' '}
+                      <strong>
+                        {generalHiPreed.totalMaturityRefund.toLocaleString()}원 100% 전액 환급 (서비스 미이용 시)
                       </strong>{' '}
-                      일시 차감 반영
-                    </>
-                  ) : (
-                    <>🎯 최종 {subSummary.periodLabel} 체감가 합계</>
+                      (월 납입금{' '}
+                      <strong>
+                        {generalHiPreed.totalMonthlyDeposit.toLocaleString()}원
+                      </strong>{' '}
+                      적립형)
+                    </p>
                   )}
                 </div>
-                <div className="text-sm sm:text-base font-black text-amber-300 font-mono">
-                  최종 {subSummary.periodLabel} 체감가{' '}
-                  <SpringNumberFlow value={subSummary.finalTotalFee} suffix="원" />
-                </div>
               </div>
-            </div>
+            )}
 
-            <div className="p-4 sm:p-5 space-y-4">
-              {/* 구독 품목 */}
-              <div className="space-y-1.5">
-                {subSummary.displayItems.map((it, idx) => (
-                  <div
-                    key={it.id || idx}
-                    className="rounded-2xl bg-[#FAF8F4] border border-[#E4DFD5] px-3.5 py-2.5 flex items-center justify-between gap-2"
-                  >
-                    <div>
-                      <div className="text-xs sm:text-sm font-black">
-                        {it.category || `구독 가전 ${idx + 1}`}{' '}
-                        <span className="text-[11px] font-bold text-sky-700">
-                          ({it.period || subSummary.representativePeriod}개월)
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-[#78716C] font-medium">
-                        {it.modelName ? `${it.modelName} · ` : ''}
-                        {it.careService}
-                      </div>
+            {showSub && (
+              <div className="space-y-3">
+                {originSubAffiliateCard && (
+                  <div className="rounded-2xl border border-sky-200 bg-sky-50/55 p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-black text-sky-950 flex items-center gap-1.5">
+                        <CreditCard className="w-3.5 h-3.5 shrink-0 text-sky-700" />
+                        <span>구독 결제카드 · 전월 실적 구간 비교</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-sky-700">
+                        선택 제휴카드
+                      </span>
                     </div>
-                    <span className="text-xs sm:text-sm font-black font-mono shrink-0">
-                      월 {(Number(it.monthlyFee) || 0).toLocaleString()}원
-                    </span>
-                  </div>
-                ))}
-              </div>
 
-              {/* [1] 직접 눌러보는 결제카드 (견적 발송 시 선택한 구독 제휴카드만 노출) */}
-              {originSubAffiliateCard && (
-                <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/50 p-3.5 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-black text-sky-950 flex items-center gap-1.5">
-                      <CreditCard className="w-3.5 h-3.5 shrink-0 text-sky-700" />
-                      <span>직접 눌러보는 결제카드 · 전월 실적 구간</span>
-                    </span>
-                    <span className="text-[10px] font-bold text-sky-700 shrink-0">
-                      선택 제휴카드
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       type="button"
                       onClick={() =>
@@ -704,7 +643,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                       }
                       className={`px-3 py-1.5 rounded-xl text-xs font-black border inline-flex items-center gap-1.5 cursor-pointer schedule-tactile ${
                         simState.selectedCardId === originSubAffiliateCard.id
-                          ? 'bg-sky-600 text-white border-sky-700 shadow-2xs'
+                          ? 'bg-sky-600 text-white border-sky-700'
                           : 'bg-white text-slate-700 border-sky-200'
                       }`}
                     >
@@ -713,12 +652,10 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                       )}
                       <span>{originSubAffiliateCard.name}</span>
                     </button>
-                  </div>
 
-                  {subSummary.currentCard &&
-                    subSummary.currentCard.id === originSubAffiliateCard.id && (
+                    {currentCard && currentCard.id === originSubAffiliateCard.id && (
                       <div className="grid grid-cols-3 gap-1.5">
-                        {subSummary.currentCard.tiers.map((tier) => {
+                        {currentCard.tiers.map((tier) => {
                           const active = simState.selectedCardTierId === tier.id;
                           return (
                             <button
@@ -747,156 +684,91 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                         })}
                       </div>
                     )}
-
-                  {subSummary.totalSubCashback > 0 && (
-                    <div className="rounded-xl bg-emerald-50 border border-emerald-300 px-3 py-2 text-[11px] font-bold text-emerald-900 space-y-0.5">
-                      <div>
-                        🎁 1회 일시 입금 캐시백 총{' '}
-                        <strong>-{subSummary.totalSubCashback.toLocaleString()}원</strong> 적용됨
-                        (최종 {subSummary.periodLabel} 체감가{' '}
-                        <strong>{subSummary.finalTotalFee.toLocaleString()}원</strong>에 차감 반영)
-                      </div>
-                      <div className="text-[10.5px] text-emerald-700">
-                        {subSummary.subTierCashback > 0 &&
-                          `${subSummary.currentCard?.shortName || ''} 300만↑ 금액대별 캐시백 -${subSummary.subTierCashback.toLocaleString()}원`}
-                        {subSummary.subTierCashback > 0 &&
-                          subSummary.subExtraCashback > 0 &&
-                          ' · '}
-                        {subSummary.subExtraCashback > 0 &&
-                          `추가 캐시백 -${subSummary.subExtraCashback.toLocaleString()}원`}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 카드 미선택 상태에서 추가 캐시백만 있는 경우 표시 */}
-              {!originSubAffiliateCard && subSummary.totalSubCashback > 0 && (
-                <div className="rounded-xl bg-emerald-50 border border-emerald-300 px-3 py-2 text-[11px] font-bold text-emerald-900">
-                  🎁 1회 일시 입금 캐시백 총{' '}
-                  <strong>-{subSummary.totalSubCashback.toLocaleString()}원</strong> 적용됨
-                  (최종 {subSummary.periodLabel} 체감가{' '}
-                  <strong>{subSummary.finalTotalFee.toLocaleString()}원</strong>에 차감 반영)
-                </div>
-              )}
-
-              {/* [2] 라이프케어상품 결합 지원금 시뮬레이터 (구독 · 혼합 공통 최대 8개 제한) */}
-              <div className="rounded-2xl border-2 border-sky-200 bg-sky-50/50 p-3.5 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-xs sm:text-[13px] font-black text-sky-950 flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-sky-700" />
-                      <span>라이프케어상품 결합 지원금 시뮬레이터</span>
-                    </div>
-                    <p className="text-[11px] font-bold text-sky-800 mt-0.5">
-                      중복상관없이 최대 8개 플랜 가입가능
-                    </p>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-white border border-sky-200 text-[10.5px] font-black text-sky-900 shrink-0">
-                    {simState.quoteMode === 'hybrid'
-                      ? `합산 ${combinedLifecareAccounts}/8개`
-                      : `${hiPlusSummary.totalAccounts}/8개`}
-                  </span>
-                </div>
+                )}
 
-                <div className="grid grid-cols-3 gap-2">
-                  {HI_PLUS_PLANS.map((plan) => {
-                    const cnt = simState.hiPlusCounts[plan.id] || 0;
-                    const unitSupport =
-                      subSummary.representativePeriod === 36
-                        ? plan.monthlySupport36
-                        : plan.monthlySupport60;
-                    return (
-                      <div
-                        key={plan.id}
-                        className={`rounded-xl border p-2 flex flex-col justify-between gap-1.5 ${
-                          cnt > 0
-                            ? 'bg-white border-rose-500 shadow-2xs'
-                            : 'bg-white/70 border-sky-200'
-                        }`}
-                      >
-                        <div>
-                          <div className="text-[11px] font-black">{plan.buttonLabel}</div>
-                          <div className="text-[9.5px] sm:text-[10px] font-bold text-rose-600 font-mono truncate">
-                            월 -{(unitSupport / 1000).toLocaleString()}천원
+                <div className="rounded-2xl border border-sky-200 bg-sky-50/55 p-3.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-black text-sky-950 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 shrink-0 text-sky-700" />
+                        <span>구독 라이프케어(Hi구독 플러스) 시뮬레이터</span>
+                      </div>
+                      <p className="text-[10.5px] font-bold text-sky-800 mt-0.5">
+                        중복 상관없이 최대 8개 플랜 가입 가능
+                      </p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-white border border-sky-200 text-[10.5px] font-black text-sky-900 shrink-0">
+                      {isHybrid
+                        ? `합산 ${combinedLifecareAccounts}/8개`
+                        : `${hiPlusSummary.totalAccounts}/8개`}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {HI_PLUS_PLANS.map((plan) => {
+                      const cnt = simState.hiPlusCounts[plan.id] || 0;
+                      const unitSupport =
+                        subSummary.representativePeriod === 36
+                          ? plan.monthlySupport36
+                          : plan.monthlySupport60;
+                      return (
+                        <div
+                          key={plan.id}
+                          className={`rounded-xl border p-2 flex flex-col justify-between gap-1.5 ${
+                            cnt > 0
+                              ? 'bg-white border-rose-500 shadow-2xs'
+                              : 'bg-white/70 border-sky-200'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-[11px] font-black">{plan.buttonLabel}</div>
+                            <div className="text-[9.5px] sm:text-[10px] font-bold text-rose-600 font-mono truncate">
+                              월 -{(unitSupport / 1000).toLocaleString()}천원
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <button
+                              type="button"
+                              disabled={cnt === 0}
+                              onClick={() => handleAdjustHiPlus(plan.id, -1)}
+                              className="w-6 h-6 rounded-lg bg-slate-100 font-black text-xs cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+                            >
+                              -
+                            </button>
+                            <span className="text-xs font-black font-mono">{cnt}</span>
+                            <button
+                              type="button"
+                              disabled={!canAddMoreLifecare}
+                              onClick={() => handleAdjustHiPlus(plan.id, 1)}
+                              className="w-6 h-6 rounded-lg bg-slate-900 text-white font-black text-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              +
+                            </button>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <button
-                            type="button"
-                            disabled={cnt === 0}
-                            onClick={() => handleAdjustHiPlus(plan.id, -1)}
-                            className="w-6 h-6 rounded-lg bg-slate-100 font-black text-xs cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
-                          >
-                            -
-                          </button>
-                          <span className="text-xs font-black font-mono">{cnt}</span>
-                          <button
-                            type="button"
-                            disabled={!canAddMoreLifecare}
-                            onClick={() => handleAdjustHiPlus(plan.id, 1)}
-                            className="w-6 h-6 rounded-lg bg-slate-900 text-white font-black text-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+
+                  {hiPlusSummary.totalAccounts > 0 && (
+                    <p className="text-[11px] font-bold text-sky-950 leading-relaxed">
+                      ✓ 만기(120회) 시 납입 원금{' '}
+                      <strong>
+                        {hiPlusSummary.totalMaturityRefund.toLocaleString()}원 100% 전액 환급 (서비스 미이용 시)
+                      </strong>{' '}
+                      (월 납입금{' '}
+                      <strong>
+                        {hiPlusSummary.totalMonthlyDeposit.toLocaleString()}원
+                      </strong>{' '}
+                      · 1~90회 적립형)
+                    </p>
+                  )}
                 </div>
-
-                {hiPlusSummary.totalAccounts > 0 && (
-                  <p className="text-[11px] font-bold text-sky-950 leading-relaxed">
-                    ✓ 만기(120회) 시 납입 원금{' '}
-                    <strong>
-                      {hiPlusSummary.totalMaturityRefund.toLocaleString()}원 100% 전액 환급 (서비스 미이용 시)
-                    </strong>{' '}
-                    (월 납입금{' '}
-                    <strong>
-                      {hiPlusSummary.totalMonthlyDeposit.toLocaleString()}원
-                    </strong>{' '}
-                    · 1~90회 적립형)
-                  </p>
-                )}
               </div>
-            </div>
-          </section>
-        )}
-
-        {/* 혼합 견적 모드: 일반구매 + 구독구매 최종 혜택가 통합 합계 카드 */}
-        {showGeneral && showSub && (
-          <section className="rounded-3xl bg-[#18181B] text-white p-5 space-y-2 shadow-md">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-xs font-extrabold text-amber-300">
-                🎯 일반구매 + 구독구매 최종 혜택가 합계
-              </span>
-              <span className="text-[11px] font-bold text-slate-300 font-mono">
-                통합 총 혜택 -
-                {(
-                  generalSummary.totalDiscountAndBenefit + subSummary.totalSubBenefit
-                ).toLocaleString()}
-                원
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between gap-2 flex-wrap">
-              <div className="text-xs font-bold text-slate-300 leading-relaxed">
-                일반 체감 {generalSummary.rawNet.toLocaleString()}원 + 구독{' '}
-                {subSummary.periodLabel} 최종 체감 {subSummary.finalTotalFee.toLocaleString()}원
-                (월 {subSummary.finalMonthlyFee.toLocaleString()}원
-                {subSummary.totalSubCashback > 0
-                  ? ` · 1회 캐시백 -${subSummary.totalSubCashback.toLocaleString()}원 반영`
-                  : ''}
-                )
-              </div>
-              <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono">
-                <SpringNumberFlow
-                  value={generalSummary.rawNet + subSummary.finalTotalFee}
-                  suffix="원"
-                />
-              </div>
-            </div>
-          </section>
-        )}
+            )}
+          </div>
+        </section>
 
         {/* 결합상품 필수 안내 아코디언 (공정위/소비자 안내 준수) */}
         <div className="rounded-2xl bg-white border border-[#E4DFD5] overflow-hidden">
@@ -931,9 +803,9 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
         </div>
       </main>
 
-      {/* ==================== 하단 엄지 영역 고정 컨버전 독 (Smart Thumb-Zone Dock) ==================== */}
+      {/* 하단 엄지 영역 고정 컨버전 독 (Smart Thumb-Zone Dock) */}
       <div className="safe-bottom-dock fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-[#D6D0C4] px-3 sm:px-3.5 pt-2.5 shadow-2xl">
-        <div className="max-w-2xl mx-auto flex items-center justify-between gap-2.5">
+        <div className={`${containerMaxW} mx-auto flex items-center justify-between gap-2.5`}>
           <div className="min-w-0">
             <div className="text-[10px] font-bold text-[#78716C] truncate">
               {payload.consultant.storeName} · {payload.consultant.name}
@@ -950,11 +822,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                 </>
               ) : simState.quoteMode === 'hybrid' ? (
                 <>
-                  통합{' '}
-                  <SpringNumberFlow
-                    value={generalSummary.rawNet + subSummary.finalTotalFee}
-                    suffix="원"
-                  />
+                  통합 <SpringNumberFlow value={hybridCombinedNetTotal} suffix="원" />
                 </>
               ) : (
                 <SpringNumberFlow value={generalSummary.rawNet} suffix="원" />
@@ -975,7 +843,12 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
 
             {cleanPhone && (
               <a
-                href={`sms:${cleanPhone}${typeof navigator !== 'undefined' && /iPad|iPhone|iPod/i.test(navigator.userAgent) ? '&' : '?'}body=${smsBody}`}
+                href={`sms:${cleanPhone}${
+                  typeof navigator !== 'undefined' &&
+                  /iPad|iPhone|iPod/i.test(navigator.userAgent)
+                    ? '&'
+                    : '?'
+                }body=${smsBody}`}
                 className="px-2.5 sm:px-3.5 py-2.5 rounded-2xl bg-[#F4ECE1] hover:bg-[#EAE0D0] text-[#6E4423] border border-[#D8C3A8] text-xs font-black inline-flex items-center gap-1 sm:gap-1.5 schedule-tactile whitespace-nowrap"
               >
                 <MessageSquare className="w-4 h-4" />
@@ -1009,11 +882,6 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
     </div>
   );
 };
-
-
-// ============================================================================
-// 3. 고객 전용 독립 보안 루트 (직원용 App.tsx 마운트 자체를 원천 차단하는 샌드박스 엔트리)
-// ============================================================================
 
 export const CustomerViewerRoot: React.FC = () => {
   const [payload, setPayload] = useState<SharedQuotePayload | null>(null);
