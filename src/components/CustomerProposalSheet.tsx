@@ -749,7 +749,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                                 {idx + 1}. {it.category || `구독가전 ${idx + 1}`}
                                 {it.modelName ? ` (${it.modelName})` : ''}
                               </span>
-                              <span className="text-[10px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded-md">
+                              <span className="text-[10px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-md">
                                 [{itemPeriod}개월 구독]
                               </span>
                             </div>
