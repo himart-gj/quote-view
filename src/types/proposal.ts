@@ -866,6 +866,12 @@ export interface HiPlusPlanSpec {
 
 export interface ProposalState {
   quoteMode: QuoteMode;
+  compareModes?: QuoteMode[];
+  modeConfigs?: {
+    general?: GeneralPlanData;
+    subscription?: GeneralPlanData;
+    hybrid?: GeneralPlanData;
+  };
 
   // 일반구매(일시불) 현재 활성 안 상태 (1안 또는 2안)
   activeGeneralPlan: 1 | 2;
@@ -1053,3 +1059,213 @@ export function calculateHiPlusSummary(
     activePlans,
   };
 }
+
+export function getActiveCompareModes(state: ProposalState): QuoteMode[] {
+  const raw = Array.isArray(state.compareModes) ? state.compareModes : [];
+  const valid = raw.filter(
+    (m): m is QuoteMode =>
+      m === 'general' || m === 'subscription' || m === 'hybrid'
+  );
+  const unique = Array.from(new Set(valid));
+  if (unique.length >= 2) {
+    const order: QuoteMode[] = ['general', 'subscription', 'hybrid'];
+    return order.filter((m) => unique.includes(m));
+  }
+  return [state.quoteMode];
+}
+
+export function hasMeaningfulGeneralItems(
+  data?: GeneralPlanData | null
+): boolean {
+  if (!data || !Array.isArray(data.generalItems)) return false;
+  return data.generalItems.some(
+    (it) =>
+      (it.category || '').trim() !== '' ||
+      (it.modelName || '').trim() !== '' ||
+      (Number(it.unitPrice) || 0) > 0
+  );
+}
+
+export function hasMeaningfulSubItems(data?: GeneralPlanData | null): boolean {
+  if (!data || !Array.isArray(data.items)) return false;
+  return data.items.some(
+    (it) =>
+      (it.category || '').trim() !== '' ||
+      (it.modelName || '').trim() !== '' ||
+      (Number(it.monthlyFee) || 0) > 0 ||
+      (Number(it.contractAmount) || 0) > 0
+  );
+}
+
+export function resolveComparisonModePlanData(
+  state: ProposalState,
+  mode: QuoteMode
+): GeneralPlanData {
+  const liveData = extractGeneralPlanData(state);
+  if (state.quoteMode === mode) {
+    return liveData;
+  }
+  const configured = state.modeConfigs?.[mode]
+    ? extractGeneralPlanData(state.modeConfigs[mode]!)
+    : null;
+
+  const genFallback =
+    state.quoteMode === 'general' || hasMeaningfulGeneralItems(liveData)
+      ? liveData
+      : state.modeConfigs?.general &&
+        hasMeaningfulGeneralItems(state.modeConfigs.general)
+      ? extractGeneralPlanData(state.modeConfigs.general)
+      : state.modeConfigs?.hybrid &&
+        hasMeaningfulGeneralItems(state.modeConfigs.hybrid)
+      ? extractGeneralPlanData(state.modeConfigs.hybrid)
+      : liveData;
+
+  const subFallback =
+    state.quoteMode === 'subscription' || hasMeaningfulSubItems(liveData)
+      ? liveData
+      : state.modeConfigs?.subscription &&
+        hasMeaningfulSubItems(state.modeConfigs.subscription)
+      ? extractGeneralPlanData(state.modeConfigs.subscription)
+      : state.modeConfigs?.hybrid &&
+        hasMeaningfulSubItems(state.modeConfigs.hybrid)
+      ? extractGeneralPlanData(state.modeConfigs.hybrid)
+      : liveData;
+
+  if (!configured) {
+    return {
+      ...liveData,
+      generalItems: genFallback.generalItems,
+      generalCardType: genFallback.generalCardType,
+      instantDiscount: genFallback.instantDiscount,
+      earnedPoints: genFallback.earnedPoints,
+      pointUsed: genFallback.pointUsed,
+      autoTierCashback: genFallback.autoTierCashback,
+      manualTierCashback: genFallback.manualTierCashback,
+      extraCashback: genFallback.extraCashback,
+      extraBenefits: genFallback.extraBenefits,
+      generalHiPreedCounts: genFallback.generalHiPreedCounts,
+      items: subFallback.items,
+      subscriptionPeriod: subFallback.subscriptionPeriod,
+      careService: subFallback.careService,
+      warrantyType: subFallback.warrantyType,
+      warrantyYears: subFallback.warrantyYears,
+      allCare: subFallback.allCare,
+      selectedCardId: subFallback.selectedCardId,
+      selectedCardTierId: subFallback.selectedCardTierId,
+      hiPlusCounts: subFallback.hiPlusCounts,
+      subAutoTierCashback: subFallback.subAutoTierCashback,
+      subManualTierCashback: subFallback.subManualTierCashback,
+      subExtraCashback: subFallback.subExtraCashback,
+    };
+  }
+
+  const needGenFallback =
+    (mode === 'general' || mode === 'hybrid') &&
+    !hasMeaningfulGeneralItems(configured) &&
+    hasMeaningfulGeneralItems(genFallback);
+  const needSubFallback =
+    (mode === 'subscription' || mode === 'hybrid') &&
+    !hasMeaningfulSubItems(configured) &&
+    hasMeaningfulSubItems(subFallback);
+
+  return {
+    ...configured,
+    ...(needGenFallback
+      ? {
+          generalItems: genFallback.generalItems,
+          generalCardType: genFallback.generalCardType,
+          instantDiscount: genFallback.instantDiscount,
+          earnedPoints: genFallback.earnedPoints,
+          pointUsed: genFallback.pointUsed,
+          autoTierCashback: genFallback.autoTierCashback,
+          manualTierCashback: genFallback.manualTierCashback,
+          extraCashback: genFallback.extraCashback,
+          extraBenefits: genFallback.extraBenefits,
+          generalHiPreedCounts: genFallback.generalHiPreedCounts,
+        }
+      : {}),
+    ...(needSubFallback
+      ? {
+          items: subFallback.items,
+          subscriptionPeriod: subFallback.subscriptionPeriod,
+          careService: subFallback.careService,
+          warrantyType: subFallback.warrantyType,
+          warrantyYears: subFallback.warrantyYears,
+          allCare: subFallback.allCare,
+          selectedCardId: subFallback.selectedCardId,
+          selectedCardTierId: subFallback.selectedCardTierId,
+          hiPlusCounts: subFallback.hiPlusCounts,
+          subAutoTierCashback: subFallback.subAutoTierCashback,
+          subManualTierCashback: subFallback.subManualTierCashback,
+          subExtraCashback: subFallback.subExtraCashback,
+        }
+      : {}),
+  };
+}
+
+export const createEmptyGeneralPlanData = (
+  mode: QuoteMode,
+  planNum: 1 | 2
+): GeneralPlanData => ({
+  generalItems: [
+    {
+      id: `gen-${mode}-p${planNum}-1`,
+      category: "",
+      modelName: "",
+      quantity: 1,
+      unitPrice: 0,
+    },
+  ],
+  generalCardType: "미정",
+  instantDiscount: 0,
+  earnedPoints: 0,
+  pointUsed: 0,
+  autoTierCashback: true,
+  manualTierCashback: 0,
+  extraCashback: 0,
+  extraBenefits: [],
+  generalHiPreedCounts: {
+    hf75: 0,
+    hf150: 0,
+    hf225: 0,
+    hf300: 0,
+  },
+  items: [
+    {
+      id: `sub-${mode}-p${planNum}-1`,
+      category: "",
+      modelName: "",
+      monthlyFee: 0,
+      period: 60,
+      careService: SUB_CARE_OPTIONS[0],
+    },
+  ],
+  subscriptionPeriod: 60,
+  careService: SUB_CARE_OPTIONS[0],
+  warrantyType: "AS연장보험 + 가전수리올케어",
+  warrantyYears: 5,
+  allCare: true,
+  selectedCardId: "none",
+  selectedCardTierId: "",
+  hiPlusCounts: {
+    hi72: 0,
+    hi90: 0,
+    hi108: 0,
+  },
+  subAutoTierCashback: true,
+  subManualTierCashback: 0,
+  subExtraCashback: 0,
+});
+
+export const createInitialState = (mode: QuoteMode): ProposalState => {
+  const plan1 = createEmptyGeneralPlanData(mode, 1);
+  const plan2 = createEmptyGeneralPlanData(mode, 2);
+
+  return {
+    quoteMode: mode,
+    activeGeneralPlan: 1,
+    generalPlan1: plan1,
+    generalPlan2: plan2,
+    ...plan1,
+  };
+};

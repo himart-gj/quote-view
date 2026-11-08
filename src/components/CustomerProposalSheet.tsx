@@ -1,5 +1,7 @@
 import React from 'react';
 import { CreditCard, Gift, Layers, RefreshCw, ShieldCheck, ShoppingBag, Sparkles } from 'lucide-react';
+import { getActiveCompareModes } from '../types/proposal';
+import { MultiModeComparisonSection } from './MultiModeComparisonSection';
 import { SpringNumberFlow } from './SpringNumberFlow';
 
 const sanitizeFiveYearText = (text?: string): string => {
@@ -32,6 +34,14 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
     <>
         {/* ==================== 메인 고객 맞춤 제안서 시트 (통합앱 고객 제안서 배열과 100% 동일 순서) ==================== */}
         <section className="rounded-3xl bg-white border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4 text-slate-900">
+          {getActiveCompareModes(simState).length >= 2 ? (
+            <MultiModeComparisonSection
+              state={simState}
+              fmtCat={(v) => (v || '').trim()}
+              fmtModel={(v) => (v || '').trim()}
+            />
+          ) : (
+            <>
           {/* -------------------- CASE A: 일반구매 단독 제안서 (가전 합계 -> 즉시할인 -> 결제가 -> 캐시백/추가혜택 -> 최종가) -------------------- */}
           {simState.quoteMode === 'general' && (
             <div className="space-y-3.5 sm:space-y-4">
@@ -922,6 +932,8 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                 </div>
               )}
             </div>
+          )}
+            </>
           )}
         </section>
     </>
