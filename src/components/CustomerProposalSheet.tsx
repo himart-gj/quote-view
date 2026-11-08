@@ -515,12 +515,14 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                         {subSummary.periodLabel} 월 납부 합계{' '}
                         {subSummary.totalTermBillingBeforeCashback.toLocaleString()}원
                         ➖ 일시 입금 캐시백{' '}
-                        {subSummary.totalSubCashback.toLocaleString()}원 (원금{' '}
-                        {subSummary.totalPrincipal.toLocaleString()}원)
+                        {subSummary.totalSubCashback.toLocaleString()}원{' '}
+                        <span className="whitespace-nowrap">
+                          (원금 {subSummary.totalPrincipal.toLocaleString()}원)
+                        </span>
                       </div>
                     </div>
                     <div className="text-right shrink-0 pl-2">
-                      <span className="text-xl sm:text-3xl font-black text-amber-400 font-mono tracking-tight">
+                      <span className="text-xl sm:text-3xl font-black text-amber-400 font-mono tracking-tight whitespace-nowrap">
                         <SpringNumberFlow value={subSummary.finalTotalFee} suffix="원" />
                       </span>
                     </div>
@@ -528,14 +530,14 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                 </div>
               ) : (
                 <div className="bg-slate-900 text-white rounded-2xl px-4 sm:px-5 py-3.5 flex items-center justify-between gap-2">
-                  <span className="text-xs sm:text-sm font-black text-slate-200">
+                  <span className="text-xs sm:text-sm font-black text-slate-200 whitespace-nowrap shrink-0">
                     최종 {subSummary.periodLabel} 체감가 합계
                   </span>
-                  <div className="flex items-baseline gap-2 flex-wrap justify-end">
-                    <span className="text-lg sm:text-2xl font-black text-white font-mono">
+                  <div className="flex items-baseline gap-1.5 flex-wrap justify-end text-right">
+                    <span className="text-lg sm:text-2xl font-black text-white font-mono whitespace-nowrap">
                       <SpringNumberFlow value={subSummary.finalTotalFee} suffix="원" />
                     </span>
-                    <span className="text-[11px] sm:text-xs font-bold text-slate-400">
+                    <span className="text-[11px] sm:text-xs font-bold text-slate-400 whitespace-nowrap">
                       (원금 {subSummary.totalPrincipal.toLocaleString()}원)
                     </span>
                   </div>
@@ -548,14 +550,14 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                   <span className="flex items-center gap-1.5 text-indigo-950 font-extrabold leading-relaxed">
                     <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
                     <span>
-                      구독프리드(Hi구독 플러스) 안내: 만기(120회) 시 납입 원금{' '}
+                      구독프리드(Hi구독 플러스) 안내: 납입기간 90회(30회는 거치만 · 120회 만기) 시 납입 원금{' '}
                       <strong className="text-indigo-700">
                         {hiPlusSummary.totalMaturityRefund.toLocaleString()}원 100% 전액 환급 (서비스 미이용 시)
                       </strong>
                     </span>
                   </span>
-                  <span className="text-[11px] font-bold text-slate-500">
-                    월 납입금 {hiPlusSummary.totalMonthlyDeposit.toLocaleString()}원 · 1~90회 적립형
+                  <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">
+                    월 납입금 {hiPlusSummary.totalMonthlyDeposit.toLocaleString()}원 · 납입기간 90회 (30회는 거치만)
                   </span>
                 </div>
               )}
@@ -853,14 +855,16 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                     </div>
                   )}
 
-                  {/* 구독 최종 기간 체감가 리본 바 */}
-                  <div className="bg-slate-900 text-white rounded-xl px-4 py-2.5 flex items-center justify-between gap-2 text-xs">
-                    <span className="font-extrabold text-amber-300">
+                  {/* 구독 최종 기간 체감가 리본 바 (원금 한 글자 줄바꿈 원천 방지) */}
+                  <div className="bg-slate-900 text-white rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs">
+                    <span className="font-extrabold text-amber-300 whitespace-nowrap shrink-0">
                       🎯 최종 {subSummary.periodLabel} 체감가
                     </span>
-                    <span className="font-black text-white font-mono">
-                      <SpringNumberFlow value={subSummary.finalTotalFee} suffix="원" />{' '}
-                      <span className="font-bold text-slate-400">
+                    <span className="font-black text-white font-mono text-right flex flex-wrap items-baseline justify-end gap-x-1.5">
+                      <span className="whitespace-nowrap">
+                        <SpringNumberFlow value={subSummary.finalTotalFee} suffix="원" />
+                      </span>
+                      <span className="font-bold text-slate-400 text-[11px] whitespace-nowrap">
                         (원금 {subSummary.totalPrincipal.toLocaleString()}원)
                       </span>
                     </span>
@@ -871,7 +875,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
               {/* 3. 혼합 제안서 최하단 통합 합산 바 */}
               <div className="bg-slate-900 text-white rounded-2xl px-4 sm:px-5 py-4 flex flex-wrap items-center justify-between gap-3 shadow-md">
                 <div className="space-y-1 min-w-0">
-                  <div className="text-xs sm:text-sm font-black text-slate-100 leading-relaxed">
+                  <div className="text-xs sm:text-sm font-black text-slate-100 leading-relaxed break-keep">
                     일반구매 최종 혜택가 ({generalSummary.rawNet.toLocaleString()}원) +
                     구독구매 {subSummary.periodLabel} 최종 체감가 (
                     {subSummary.finalTotalFee.toLocaleString()}원 · 월{' '}
@@ -887,10 +891,10 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                   </div>
                 </div>
                 <div className="text-right ml-auto">
-                  <div className="text-xs font-extrabold text-amber-300 mb-0.5">
+                  <div className="text-xs font-extrabold text-amber-300 mb-0.5 whitespace-nowrap">
                     🎯 일반구매 + 구독구매 최종 혜택가 합계
                   </div>
-                  <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono tracking-tight">
+                  <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono tracking-tight whitespace-nowrap">
                     <SpringNumberFlow value={hybridCombinedNetTotal} suffix="원" />
                   </div>
                 </div>
@@ -906,14 +910,14 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                       프리드 결합 만기 환급 안내 (서비스 미이용 시 납입 원금 100% 전액 환급):
                     </span>
                   </span>
-                  <span className="text-[11.5px] font-extrabold text-indigo-800">
+                  <span className="text-[11.5px] font-extrabold text-indigo-800 break-keep">
                     {generalHiPreed.totalAccounts > 0 &&
                       `일반 하이프리드 만기(150회) ${generalHiPreed.totalMaturityRefund.toLocaleString()}원 환급`}
                     {generalHiPreed.totalAccounts > 0 &&
                       hiPlusSummary.totalAccounts > 0 &&
                       ' · '}
                     {hiPlusSummary.totalAccounts > 0 &&
-                      `구독프리드 만기(120회) ${hiPlusSummary.totalMaturityRefund.toLocaleString()}원 환급`}
+                      `구독프리드 (납입기간 90회 · 30회는 거치만 / 120회 만기) ${hiPlusSummary.totalMaturityRefund.toLocaleString()}원 환급`}
                   </span>
                 </div>
               )}
