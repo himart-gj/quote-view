@@ -1,5 +1,5 @@
 import React, { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppStep, createInitialState, extractGeneralPlanData, ProposalState, QuoteMode, SUB_CARE_OPTIONS, SubscriptionPeriod } from './types/proposal';
+import { AppStep, createInitialState, extractGeneralPlanData, hasMeaningfulGeneralItems, hasMeaningfulSubItems, ProposalState, QuoteMode, resolveComparisonModePlanData, SUB_CARE_OPTIONS, SubscriptionPeriod } from './types/proposal';
 import { ControlPanel } from './components/ControlPanel';
 import { ProposalPreview } from './components/ProposalPreview';
 import { fetchRemoteSchedules } from './components/ScheduleModal';
@@ -424,7 +424,6 @@ export function App() {
     const handlePopState = () => {
       const current = latestAppStateRef.current;
 
-      // 최우선 순위: 통합검색 옴니바 또는 AI 비서 모달이 열려 있으면 닫기
       if (current.isOmnibarOpen) {
         setIsOmnibarOpen(false);
         pushAppHistoryGuard('modal-close');
@@ -436,7 +435,6 @@ export function App() {
         return;
       }
 
-      // 0순위: 현재 열려 있는 모달 내부에 하위 뒤로가기 상태가 있으면 그것만 먼저 한 단계 되돌림
       const modalInternalHandler = (window as any).__modalInternalBackHandler as
         | (() => boolean)
         | undefined;
@@ -448,7 +446,6 @@ export function App() {
         }
       }
 
-      // 1순위: 현재 열려 있는 최상위 모달/메뉴 닫기 (현재 화면은 그대로 유지)
       if (current.isStealthPinOpen) {
         setIsStealthPinOpen(false);
         pushAppHistoryGuard('modal-close');
@@ -500,7 +497,6 @@ export function App() {
         return;
       }
 
-      // 2순위: 좌우 스플릿 상담 모드의 우측 제안서 내부 팝업/프리드안내 탭 뒤로가기
       const splitPreviewBackHandler = (window as any)
         .__proposalPreviewSplitBackHandler as (() => boolean) | undefined;
       if (typeof splitPreviewBackHandler === 'function') {
@@ -510,7 +506,6 @@ export function App() {
         }
       }
 
-      // 2-2순위: 현재 메인 화면 내부의 하위 뷰/팝업 뒤로가기 핸들러(__subViewBackHandler) 실행
       const subBackHandler = (window as any).__subViewBackHandler as
         | (() => boolean)
         | undefined;
@@ -522,14 +517,12 @@ export function App() {
         }
       }
 
-      // 3순위: 스마트 히스토리 스택(stepHistory)을 따라 직전 화면으로 1단계 복귀 (예: 제안서->견적서->고객관리/DB관리->홈)
       if (current.step !== 'home') {
         handleNavigateBack();
         pushAppHistoryGuard('step-back');
         return;
       }
 
-      // 홈 화면에서도 절대 앱이 종료되지 않도록 가드 유지
       pushAppHistoryGuard('home-stay');
     };
 
@@ -631,7 +624,6 @@ export function App() {
           // ignore
         });
 
-      // 월간 휴무표 & 월별 모델 수당 단가표 전 직원 최신 데이터 자동 동기화
       fetchRemoteSchedules().catch(() => {
         // ignore
       });
@@ -681,7 +673,6 @@ export function App() {
   }, [careDataset]);
 
   // ==================== 국지현 전용 비공개 [마케팅 DB관리] 스텔스 동기화 ====================
-
   useEffect(() => {
     const syncOwnerDb = () => {
       setIsOwnerDbUnlocked(isOwnerMarketingDbUnlocked());
@@ -692,7 +683,6 @@ export function App() {
       window.removeEventListener(MARKETING_DB_UPDATED_EVENT, syncOwnerDb);
   }, []);
 
-  // 대표님 기기(잠금 해제 상태)에서는 홈/타 화면에 있을 때만 백그라운드 동기화 수행 (DB관리 화면 내에서는 자체 폴링만 동작해 중복 방지)
   useEffect(() => {
     if (!isOwnerDbUnlocked || step === 'marketing-db') return;
     const runBgSync = () => {
@@ -783,7 +773,6 @@ export function App() {
     return '메인 홈';
   }, [step, activeMode]);
 
-  // 메인 홈 화면 통합 고객관리 버튼 우측 실시간 긴급 배지 카운트 계산
   const urgentCount = useMemo(() => {
     return crmCustomers
       .filter((c) => !c.deletedAt)
@@ -869,11 +858,50 @@ export function App() {
       [activeMode, generalState, subscriptionState, hybridState]
     );
 
-  const handleSwitchQuoteModeInPlace = useCallback((nextMode: QuoteMode) => {
-    setActiveMode(nextMode);
-    setParseError(null);
-    setParseGeneralError(null);
-  }, []);
+  const handleSwitchQuoteModeInPlace = useCallback(
+    (nextMode: QuoteMode) => {
+      if (nextMode === 'general' && !hasMeaningfulGeneralItems(generalState)) {
+        const seeded = resolveComparisonModePlanData(currentState, 'general');
+        if (hasMeaningfulGeneralItems(seeded)) {
+          setGeneralState((prev) => ({
+            ...prev,
+            ...seeded,
+            quoteMode: 'general',
+            generalPlan1: seeded,
+          }));
+        }
+      } else if (
+        nextMode === 'subscription' &&
+        !hasMeaningfulSubItems(subscriptionState)
+      ) {
+        const seeded = resolveComparisonModePlanData(currentState, 'subscription');
+        if (hasMeaningfulSubItems(seeded)) {
+          setSubscriptionState((prev) => ({
+            ...prev,
+            ...seeded,
+            quoteMode: 'subscription',
+            generalPlan1: seeded,
+          }));
+        }
+      } else if (nextMode === 'hybrid') {
+        const hasGen = hasMeaningfulGeneralItems(hybridState);
+        const hasSub = hasMeaningfulSubItems(hybridState);
+        if (!hasGen || !hasSub) {
+          const seeded = resolveComparisonModePlanData(currentState, 'hybrid');
+          setHybridState((prev) => ({
+            ...prev,
+            ...seeded,
+            quoteMode: 'hybrid',
+            generalPlan1: seeded,
+          }));
+        }
+      }
+      setActiveMode(nextMode);
+      setParseError(null);
+      setParseGeneralError(null);
+    },
+    [currentState, generalState, subscriptionState, hybridState]
+  );
 
   const handleEnterMode = (mode: QuoteMode) => {
     setActiveMode(mode);
@@ -910,7 +938,6 @@ export function App() {
         const base = createInitialState(targetMode);
         const parsed = JSON.parse(JSON.stringify(savedProposalState));
 
-        // 하위 호환성 보장: 예전 데이터에 generalPlan1/2 내부의 구독 필드가 없었던 경우 안전 병합
         const mergedPlan1 = extractGeneralPlanData({
           ...base.generalPlan1,
           ...(parsed.generalPlan1 || {}),
@@ -950,6 +977,12 @@ export function App() {
             parsed.generalPlan1?.hiPlusCounts ||
             parsed.hiPlusCounts ||
             base.generalPlan1.hiPlusCounts,
+          hideHiPreed: Boolean(
+            parsed.generalPlan1?.hideHiPreed ?? parsed.hideHiPreed
+          ),
+          hideSubPreed: Boolean(
+            parsed.generalPlan1?.hideSubPreed ?? parsed.hideSubPreed
+          ),
           subAutoTierCashback:
             parsed.generalPlan1?.subAutoTierCashback ??
             parsed.subAutoTierCashback ??
@@ -1152,7 +1185,6 @@ export function App() {
           0
         );
 
-        // 우측 하단 빨간색 '최종 혜택가'(finalBenefitPrice)와 정확히 일치하도록 차액 검증
         if (finalBenefitPrice > 0 && sumOfItems > finalBenefitPrice) {
           const currentCalculatedNet =
             sumOfItems -
@@ -1489,7 +1521,6 @@ export function App() {
       {/* ==================== STEP 1: 조건 입력 & 폴드/PC 실시간 좌우 스플릿 상담 스테이지 ==================== */}
       {step === 'input' && (
         <div className="flex-1 w-full flex flex-col">
-          {/* 폴드(768px+) · 태블릿 · 데스크톱 전용 실시간 스플릿 상담 모드 토글 바 */}
           <div
             className={`hidden md:flex items-center justify-between px-4 py-2 border-b no-print ${
               isDark
@@ -1587,7 +1618,7 @@ export function App() {
               activeCustomer={activeCustomer}
               onClearActiveCustomer={() => setActiveCustomer(null)}
               onOpenSaveToCrm={() => setIsSaveToCrmOpen(true)}
-                  onSwitchMode={handleSwitchQuoteModeInPlace}
+              onSwitchMode={handleSwitchQuoteModeInPlace}
             />
           )}
         </div>
@@ -1601,7 +1632,7 @@ export function App() {
           onBackToInput={handleNavigateBack}
           activeCustomer={activeCustomer}
           onOpenSaveToCrm={() => setIsSaveToCrmOpen(true)}
-                  onSwitchMode={handleSwitchQuoteModeInPlace}
+          onSwitchMode={handleSwitchQuoteModeInPlace}
           isDark={isDark}
         />
       )}
