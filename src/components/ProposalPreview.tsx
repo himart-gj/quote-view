@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { calculateGeneralHiPreedSummary, calculateGeneralPurchaseSummary, calculateHiPlusSummary, calculateSubscriptionSummary, getActiveCompareModes, getGeneralPlan1And2Summaries, ProposalState, QuoteMode, switchGeneralPlanInState } from '../types/proposal';
+import { calculateGeneralHiPreedSummary, calculateGeneralPurchaseSummary, calculateHiPlusSummary, calculateSubscriptionSummary, getActiveCompareModes, getGeneralPlan1And2Summaries, ProposalState, QuoteMode, switchGeneralPlanInState, switchQuoteModeInState } from '../types/proposal';
 import { ArrowLeft, BookOpen, ChevronDown, CreditCard, Download, Eye, EyeOff, FileText, Lock, Printer, Save, Share2, ShieldCheck, ShoppingBag, Sparkles, User } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { SpringNumberFlow } from './SpringNumberFlow';
 import { ShareQuoteLinkModal } from './CustomerShareQuoteView';
 import { maskEmbeddedModelInCategory, maskModelCodeAfter3 } from '../utils/modelMasker';
 import { ProposalPreviewSubAndHybrid } from './ProposalPreviewSubAndHybrid';
-import { MultiModeComparisonSection, PreviewModeComparisonBar } from './MultiModeComparisonSection';
+import { MultiModeTabSwitcherBanner, PreviewModeComparisonBar } from './MultiModeComparisonSection';
 import { ProposalPreviewFreedGuide } from './ProposalPreviewFreedGuide';
 
 interface ProposalPreviewProps {
@@ -26,7 +26,6 @@ const sanitizeFiveYearText = (text?: string): string => {
   if (!text) return '';
   return text.replace(/3년\s*(무상|A\/?S)/gi, '5년 $1');
 };
-
 
 export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
   state,
@@ -82,13 +81,13 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
   // ==================== 데이터 계산 ====================
   const generalSummary = calculateGeneralPurchaseSummary(state);
   const generalHiPreedSummary = calculateGeneralHiPreedSummary(
-    state.generalHiPreedCounts
+    state.generalHiPreedCounts,
+    Boolean(state.hideHiPreed)
   );
 
   const subSummary = calculateSubscriptionSummary(state);
   const representativePeriod = subSummary.representativePeriod;
   const periodLabel = subSummary.periodLabel;
-  const isMixedPeriod = subSummary.isMixedPeriod;
 
   const currentCard = subSummary.currentCard;
   const currentCardTier = subSummary.currentCardTier;
@@ -100,7 +99,6 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
   const cardMonthlyDiscount = subSummary.cardDiscount;
   const hiPlusMonthlySupport = subSummary.hiPlusMonthly;
 
-  // 마이너스 금액 허용 (0원 강제 고정 금지)
   const finalMonthlyFee = subSummary.finalMonthlyFee;
   const finalTotal60Fee = subSummary.finalTotalFee;
 
@@ -125,6 +123,32 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
 
   const isGuideTab =
     activeTab === 'guide-general' || activeTab === 'guide-sub';
+
+  const handleToggleHideHiPreed = () => {
+    const nextHidden = !state.hideHiPreed;
+    if (nextHidden && activeTab === 'guide-general') {
+      setActiveTab('proposal');
+    }
+    onChange((prev) => ({
+      ...prev,
+      hideHiPreed: nextHidden,
+      generalPlan1: { ...prev.generalPlan1, hideHiPreed: nextHidden },
+      generalPlan2: { ...prev.generalPlan2, hideHiPreed: nextHidden },
+    }));
+  };
+
+  const handleToggleHideSubPreed = () => {
+    const nextHidden = !state.hideSubPreed;
+    if (nextHidden && activeTab === 'guide-sub') {
+      setActiveTab('proposal');
+    }
+    onChange((prev) => ({
+      ...prev,
+      hideSubPreed: nextHidden,
+      generalPlan1: { ...prev.generalPlan1, hideSubPreed: nextHidden },
+      generalPlan2: { ...prev.generalPlan2, hideSubPreed: nextHidden },
+    }));
+  };
 
   // 공유 모달·저장 드롭다운·프리드 안내서 탭에서 뒤로가기 시 먼저 닫기 (스플릿 상담 모드 충돌 분리)
   useEffect(() => {
@@ -173,8 +197,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
     isSavePrintOpen,
   ]);
 
-  // 2D Auto-Fit 스케일링: 가로폭은 무조건 상수 920 고정! (offsetWidth 측정 절대 금지)
-  // 안내서 탭(#sheet-freed-guide)도 고정 1040 대신 실제 렌더링된 전체 높이를 측정하여 하단 문구 잘림 방지
+  // 2D Auto-Fit 스케일링: 가로폭은 무조건 상수 920 고정!
   useEffect(() => {
     const updateScale = () => {
       if (!viewportRef.current) return;
@@ -185,7 +208,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
 
       const availW = viewportRef.current.clientWidth;
       const availH = viewportRef.current.clientHeight;
-      const sheetW = 920; // 무조건 920 고정
+      const sheetW = 920;
       const nextSheetH = Math.max(
         720,
         activeEl.scrollHeight || activeEl.offsetHeight || 960
@@ -198,17 +221,14 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
       let nextScale: number;
 
       if (viewportWidth < 640) {
-        // 일반 스마트폰 (가로 640px 미만): 좌우 여백 최소화(패딩 8px * 2 = 16px) 후 가로폭 기준으로 확대 (세로 스크롤 지원)
         nextScale = Math.min(1, (availW - 16) / sheetW);
       } else if (viewportWidth >= 1280) {
-        // PC 모니터 (가로 1280px 이상): 최대 1.1배까지 허용하여 대화면 중앙에 시원하게 표시
         nextScale = Math.min(
           1.1,
           (availW - 28) / sheetW,
           (availH - 28) / nextSheetH
         );
       } else {
-        // 갤럭시 폴드 펼침 화면 & 태블릿 (가로 640px ~ 1279px): 기존 2D Auto-Fit 배율 계산식 100% 동일 유지
         nextScale = Math.min(
           1,
           (availW - 24) / sheetW,
@@ -251,7 +271,6 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
     setTempMaskOverride(maskModels);
 
     try {
-      // React DOM에 모델명 마스킹(또는 원본) 텍스트가 완전히 반영될 때까지 2프레임 대기
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
       );
@@ -415,6 +434,8 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
   // 혼합 모드 일반구매 최종 혜택가 + 구독구매 총 체감가 합계
   const hybridCombinedNetTotal = generalSummary.rawNet + finalTotal60Fee;
 
+  const activeCompareModes = getActiveCompareModes(state);
+
   return (
     <div className={`${embeddedSplitMode ? 'h-full' : 'min-h-[calc(100dvh-44px)]'} w-full flex flex-col ${isDark ? 'bg-[#0E131D]' : 'bg-slate-200'} select-none`}>
       {/* ==================== 상단 고정 액션바 ==================== */}
@@ -443,10 +464,10 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
               }`}
             >
               <FileText className="w-3 h-3" />
-              <span>{state.quoteMode === 'hybrid' ? '1.혼합제안서' : '1.제안서'}</span>
+              <span>{state.quoteMode === 'hybrid' ? '1.혼합제안서' : state.quoteMode === 'subscription' ? '1.구독제안서' : '1.일반제안서'}</span>
             </button>
 
-            {state.quoteMode === 'general' && (
+            {state.quoteMode === 'general' && !state.hideHiPreed && (
               <button
                 type="button"
                 onClick={() => setActiveTab('guide-general')}
@@ -466,7 +487,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
               </button>
             )}
 
-            {state.quoteMode === 'subscription' && (
+            {state.quoteMode === 'subscription' && !state.hideSubPreed && (
               <button
                 type="button"
                 onClick={() => setActiveTab('guide-sub')}
@@ -488,41 +509,97 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
 
             {state.quoteMode === 'hybrid' && (
               <>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('guide-general')}
-                  className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-md font-extrabold text-[11px] transition cursor-pointer whitespace-nowrap ${
-                    activeTab === 'guide-general'
-                      ? 'bg-amber-500 text-slate-950 shadow-xs'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <BookOpen className="w-3 h-3" />
-                  <span>2.하이프리드</span>
-                  {generalHiPreedSummary.totalAccounts > 0 && (
-                    <span className="px-1 py-0.2 rounded-full bg-slate-900/20 text-[10px]">
-                      {generalHiPreedSummary.totalAccounts}
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('guide-sub')}
-                  className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-md font-extrabold text-[11px] transition cursor-pointer whitespace-nowrap ${
-                    activeTab === 'guide-sub'
-                      ? 'bg-rose-600 text-white shadow-xs'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <BookOpen className="w-3 h-3" />
-                  <span>3.구독프리드</span>
-                  {hiSummary.totalAccounts > 0 && (
-                    <span className="px-1 py-0.2 rounded-full bg-white/20 text-[10px]">
-                      {hiSummary.totalAccounts}
-                    </span>
-                  )}
-                </button>
+                {!state.hideHiPreed && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('guide-general')}
+                    className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-md font-extrabold text-[11px] transition cursor-pointer whitespace-nowrap ${
+                      activeTab === 'guide-general'
+                        ? 'bg-amber-500 text-slate-950 shadow-xs'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <BookOpen className="w-3 h-3" />
+                    <span>2.하이프리드</span>
+                    {generalHiPreedSummary.totalAccounts > 0 && (
+                      <span className="px-1 py-0.2 rounded-full bg-slate-900/20 text-[10px]">
+                        {generalHiPreedSummary.totalAccounts}
+                      </span>
+                    )}
+                  </button>
+                )}
+                {!state.hideSubPreed && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('guide-sub')}
+                    className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-md font-extrabold text-[11px] transition cursor-pointer whitespace-nowrap ${
+                      activeTab === 'guide-sub'
+                        ? 'bg-rose-600 text-white shadow-xs'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    <BookOpen className="w-3 h-3" />
+                    <span>3.구독프리드</span>
+                    {hiSummary.totalAccounts > 0 && (
+                      <span className="px-1 py-0.2 rounded-full bg-white/20 text-[10px]">
+                        {hiSummary.totalAccounts}
+                      </span>
+                    )}
+                  </button>
+                )}
               </>
+            )}
+          </div>
+
+          {/* 프리드 표시/숨김 원터치 토글 (내가 숨기면 제안서·고객 공유 화면에서도 숨겨짐) */}
+          <div className="flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-700 shrink-0 gap-0.5">
+            {(state.quoteMode === 'general' || state.quoteMode === 'hybrid') && (
+              <button
+                type="button"
+                onClick={handleToggleHideHiPreed}
+                title="클릭 시 일반 하이프리드 영역을 제안서 및 고객 공유 화면에서 숨기거나 표시합니다"
+                className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-md font-extrabold text-[10.5px] transition cursor-pointer whitespace-nowrap ${
+                  state.hideHiPreed
+                    ? 'bg-amber-400 text-slate-950 shadow-2xs'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                {state.hideHiPreed ? (
+                  <>
+                    <EyeOff className="w-3 h-3" />
+                    <span>일반프리드 숨김</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3 h-3 text-sky-400" />
+                    <span>일반프리드 표시</span>
+                  </>
+                )}
+              </button>
+            )}
+            {(state.quoteMode === 'subscription' || state.quoteMode === 'hybrid') && (
+              <button
+                type="button"
+                onClick={handleToggleHideSubPreed}
+                title="클릭 시 구독프리드(Hi구독 플러스) 영역을 제안서 및 고객 공유 화면에서 숨기거나 표시합니다"
+                className={`inline-flex items-center gap-1 px-1.5 py-1 rounded-md font-extrabold text-[10.5px] transition cursor-pointer whitespace-nowrap ${
+                  state.hideSubPreed
+                    ? 'bg-amber-400 text-slate-950 shadow-2xs'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                {state.hideSubPreed ? (
+                  <>
+                    <EyeOff className="w-3 h-3" />
+                    <span>구독프리드 숨김</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3 h-3 text-rose-400" />
+                    <span>구독프리드 표시</span>
+                  </>
+                )}
+              </button>
             )}
           </div>
 
@@ -599,6 +676,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
           <PreviewModeComparisonBar
             state={state}
             onChange={onChange}
+            onSwitchMode={onSwitchMode}
             onEnsureProposalTab={() => setActiveTab('proposal')}
           />
 
@@ -867,6 +945,23 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
         </div>
       </header>
 
+      {/* ==================== 복수 구매방식 선택 시 상단 탭 전환 바 (한 장에 섞지 않고 탭으로 개별 전환) ==================== */}
+      {activeCompareModes.length >= 2 && activeTab === 'proposal' && (
+        <div className="no-print w-full max-w-[920px] mx-auto px-2 sm:px-3 pt-2.5">
+          <MultiModeTabSwitcherBanner
+            state={state}
+            onSelectMode={(m) => {
+              if (onSwitchMode) {
+                onSwitchMode(m);
+              } else {
+                onChange((prev) => switchQuoteModeInState(prev, m));
+              }
+            }}
+            compact
+          />
+        </div>
+      )}
+
       {/* ==================== 중앙 2D Auto-Fit 뷰포트 ==================== */}
       <div
         ref={viewportRef}
@@ -886,7 +981,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
           }`}
         >
           {/* ===================================================================== */}
-          {/* TAB 1: 고객 맞춤 제안서 (#sheet-proposal) - 폴드/PC/출력 시 920px 고정, 스마트폰 열람 시 모바일 가독뷰 */}
+          {/* TAB 1: 고객 맞춤 제안서 (#sheet-proposal) */}
           {/* ===================================================================== */}
           {activeTab === 'proposal' && (
             <div
@@ -907,23 +1002,13 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                 useMobileFluid ? 'mobile-fluid-sheet' : ''
               }`}
             >
-              {/* -------------------- CASE 0: 일반구매 · 구독구매 · 혼합구매 통합 비교 제안서 -------------------- */}
-              {getActiveCompareModes(state).length >= 2 ? (
-                <MultiModeComparisonSection
-                  state={state}
-                  activeCustomer={activeCustomer}
-                  fmtCat={fmtCat}
-                  fmtModel={fmtModel}
-                />
-              ) : (
-                <>
               {/* -------------------- CASE A: 일반구매 단독 제안서 -------------------- */}
               {state.quoteMode === 'general' && (
                 <div className="space-y-4">
-                  {/* 상단 헤더 (깔끔한 딥 네이비 bg-slate-900) */}
-                  <div className="bg-slate-900 text-white rounded-2xl px-6 py-4 flex items-center justify-between shadow-sm">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
+                  {/* 상단 헤더 */}
+                  <div className="bg-slate-900 text-white rounded-2xl px-6 py-4 flex items-center justify-between gap-3 shadow-sm">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
                         <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-extrabold">
                           <ShoppingBag className="w-3.5 h-3.5 text-blue-400" />
                           맞춤 구매 설계안
@@ -940,12 +1025,12 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                           </span>
                         )}
                       </div>
-                      <h1 className="text-2xl font-black tracking-tight text-white">
+                      <h1 className="text-2xl font-black tracking-tight text-white break-words">
                         {generalHeaderTitle}
                       </h1>
                     </div>
-                    <div className="text-right">
-                      <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs font-extrabold text-white">
+                    <div className="text-right shrink-0">
+                      <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs font-extrabold text-white whitespace-nowrap">
                         <CreditCard className="w-4 h-4 text-blue-400" />
                         적용 제휴카드: {state.generalCardType === '미정' || state.generalCardType === '일반카드' ? '제휴카드 미적용' : state.generalCardType}
                       </span>
@@ -971,71 +1056,71 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                           return (
                             <div
                               key={item.id}
-                              className="flex items-center justify-between bg-white px-4 py-2.5 rounded-xl border border-slate-200"
+                              className="flex items-center justify-between gap-3 bg-white px-4 py-2.5 rounded-xl border border-slate-200 overflow-hidden"
                             >
-                              <div className="flex items-center gap-2.5">
-                                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-black flex items-center justify-center">
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1 flex-wrap">
+                                <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-black flex items-center justify-center shrink-0">
                                   {idx + 1}
                                 </span>
-                                <span className="text-sm font-black text-slate-900">
+                                <span className="text-sm font-black text-slate-900 break-all">
                                   {fmtCat(item.category) || `가전품목 ${idx + 1}`}
                                 </span>
                                 {item.modelName && (
-                                  <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-mono">
+                                  <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-mono break-all">
                                     {fmtModel(item.modelName)}
                                   </span>
                                 )}
                                 {item.quantity > 1 && (
-                                  <span className="text-xs font-extrabold text-blue-600">
+                                  <span className="text-xs font-extrabold text-blue-600 shrink-0">
                                     × {item.quantity}개
                                   </span>
                                 )}
                               </div>
-                              <span className="text-base font-black text-slate-900">
+                              <span className="text-base font-black text-slate-900 shrink-0 whitespace-nowrap">
                                 {lineTotal.toLocaleString()}원
                               </span>
                             </div>
                           );
                         })}
                       </div>
-                      <div className="bg-slate-900 text-white rounded-xl px-5 py-3.5 flex items-center justify-between">
+                      <div className="bg-slate-900 text-white rounded-xl px-5 py-3.5 flex items-center justify-between gap-2">
                         <span className="text-base font-black text-slate-200">
                           총 합계 금액
                         </span>
-                        <span className="text-2xl font-black text-white tracking-tight">
+                        <span className="text-2xl font-black text-white tracking-tight shrink-0 whitespace-nowrap">
                           {generalSummary.sum.toLocaleString()}원
                         </span>
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 px-6 py-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
+                    <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 px-6 py-4 flex items-center justify-between gap-3 overflow-hidden">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
                           <ShoppingBag className="w-5 h-5" />
                         </div>
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className="text-xs font-extrabold text-blue-600">
                             구매 품목 및 총 합계 금액
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xl font-black text-slate-900">
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className="text-xl font-black text-slate-900 break-all">
                               {fmtCat(state.generalItems[0]?.category) ||
                                 '맞춤 가전 패키지'}
                             </span>
                             {state.generalItems[0]?.modelName && (
-                              <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md font-mono">
+                              <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md font-mono break-all">
                                 {fmtModel(state.generalItems[0].modelName)}
                               </span>
                             )}
                             {(state.generalItems[0]?.quantity || 1) > 1 && (
-                              <span className="text-xs font-extrabold text-blue-600">
+                              <span className="text-xs font-extrabold text-blue-600 shrink-0">
                                 × {state.generalItems[0].quantity}개
                               </span>
                             )}
                           </div>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0 whitespace-nowrap">
                         <div className="text-xs font-bold text-slate-500">
                           총 합계 금액
                         </div>
@@ -1046,7 +1131,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                     </div>
                   )}
 
-                  {/* [1단계: 고객 실 결제부담금 산출] 카드 (전체 혜택이 0원일 때는 중복되는 실결제가 박스를 생략하고 최종 혜택가만 표시) */}
+                  {/* [1단계: 고객 실 결제부담금 산출] 카드 */}
                   {generalSummary.totalDiscountAndBenefit > 0 && (
                     <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-3">
                       {(generalSummary.totalStep1InstantDiscount > 0 ||
@@ -1060,15 +1145,14 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                               1단계: 고객 실 결제부담금 산출
                             </span>
                             <span className="text-xs font-bold text-slate-500">
-                              총 합계 금액에서 즉시할인 및 하이프리드 지원금 차감
+                              총 합계 금액에서 즉시할인 및 지원금 차감
                             </span>
                           </div>
 
                           <div className="space-y-2">
-                            {/* (-) 즉시할인 혜택 (0원보다 클 때만 표시) */}
                             {generalSummary.totalStep1InstantDiscount > 0 && (
-                              <div className="flex items-center justify-between bg-white px-5 py-3.5 rounded-xl border border-slate-200">
-                                <div>
+                              <div className="flex items-center justify-between gap-2 bg-white px-5 py-3.5 rounded-xl border border-slate-200">
+                                <div className="min-w-0 flex-1">
                                   <div className="text-sm font-black text-slate-900">
                                     (-) 즉시할인 혜택
                                   </div>
@@ -1078,7 +1162,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                                       : '기본 즉시할인 + 추가 즉시할인 + 포인트 즉시사용'}
                                   </div>
                                 </div>
-                                <div className="text-xl font-black text-blue-600">
+                                <div className="text-xl font-black text-blue-600 shrink-0 whitespace-nowrap">
                                   -
                                   {generalSummary.totalStep1InstantDiscount.toLocaleString()}
                                   원
@@ -1086,10 +1170,9 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                               </div>
                             )}
 
-                            {/* (-) 하이프리드 지원금 (선택 시에만 표시) */}
-                            {generalSummary.hiFreedSupport > 0 && (
-                              <div className="flex items-center justify-between bg-white px-5 py-3.5 rounded-xl border border-blue-200">
-                                <div>
+                            {!state.hideHiPreed && generalSummary.hiFreedSupport > 0 && (
+                              <div className="flex items-center justify-between gap-2 bg-white px-5 py-3.5 rounded-xl border border-blue-200">
+                                <div className="min-w-0 flex-1">
                                   <div className="text-sm font-black text-slate-900">
                                     (-) 하이프리드 지원금
                                   </div>
@@ -1100,7 +1183,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                                     결합 지원
                                   </div>
                                 </div>
-                                <div className="text-xl font-black text-blue-600">
+                                <div className="text-xl font-black text-blue-600 shrink-0 whitespace-nowrap">
                                   -{generalSummary.hiFreedSupport.toLocaleString()}
                                   원
                                 </div>
@@ -1111,12 +1194,12 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                       )}
 
                       {/* 💳 고객 실 결제부담금 (실결제가) 강조 박스 */}
-                      <div className="bg-blue-600 text-white rounded-2xl px-6 py-4 flex items-center justify-between shadow-sm">
-                        <div className="flex items-center gap-3">
+                      <div className="bg-blue-600 text-white rounded-2xl px-6 py-4 flex items-center justify-between gap-3 shadow-sm">
+                        <div className="flex items-center gap-3 min-w-0">
                           <div className="w-10 h-10 rounded-xl bg-white/15 text-white flex items-center justify-center shrink-0">
                             <CreditCard className="w-5 h-5" />
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <div className="text-base font-black text-white">
                               💳 고객 실 결제부담금 (실결제가)
                             </div>
@@ -1125,7 +1208,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                             </div>
                           </div>
                         </div>
-                        <div className="text-3xl font-black text-white tracking-tight">
+                        <div className="text-3xl font-black text-white tracking-tight shrink-0 whitespace-nowrap">
                           <SpringNumberFlow value={generalSummary.payPrice} suffix="원" />
                         </div>
                       </div>
@@ -1150,10 +1233,9 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                         </div>
 
                         <div className="space-y-2">
-                          {/* (-) 캐시백 혜택 (0원보다 클 때만 표시) */}
                           {generalSummary.totalStep2Cashback > 0 && (
-                            <div className="flex items-center justify-between bg-white px-5 py-3.5 rounded-xl border border-rose-200">
-                              <div>
+                            <div className="flex items-center justify-between gap-2 bg-white px-5 py-3.5 rounded-xl border border-rose-200">
+                              <div className="min-w-0 flex-1">
                                 <div className="text-sm font-black text-slate-900">
                                   (-) 캐시백 혜택
                                 </div>
@@ -1161,7 +1243,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                                   {step2CashbackDetails.join(' · ')}
                                 </div>
                               </div>
-                              <div className="text-xl font-black text-rose-600">
+                              <div className="text-xl font-black text-rose-600 shrink-0 whitespace-nowrap">
                                 -
                                 {generalSummary.totalStep2Cashback.toLocaleString()}
                                 원
@@ -1169,10 +1251,9 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                             </div>
                           )}
 
-                          {/* (-) 추가 혜택 (0원보다 클 때만 표시) */}
                           {generalSummary.totalStep2ExtraBenefit > 0 && (
-                            <div className="flex items-center justify-between bg-white px-5 py-3.5 rounded-xl border border-slate-200">
-                              <div>
+                            <div className="flex items-center justify-between gap-2 bg-white px-5 py-3.5 rounded-xl border border-slate-200">
+                              <div className="min-w-0 flex-1">
                                 <div className="text-sm font-black text-slate-900">
                                   (-) 추가 혜택
                                 </div>
@@ -1180,7 +1261,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                                   {step2ExtraDetails.join(' · ')}
                                 </div>
                               </div>
-                              <div className="text-xl font-black text-rose-600">
+                              <div className="text-xl font-black text-rose-600 shrink-0 whitespace-nowrap">
                                 -
                                 {generalSummary.totalStep2ExtraBenefit.toLocaleString()}
                                 원
@@ -1222,7 +1303,7 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                     </div>
                   </div>
 
-                  {generalHiPreedSummary.totalAccounts > 0 && (
+                  {!state.hideHiPreed && generalHiPreedSummary.totalAccounts > 0 && (
                     <div className="bg-blue-50/70 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center justify-between gap-2 text-xs font-bold text-slate-700">
                       <span className="flex items-center gap-1.5 text-blue-900 font-extrabold">
                         <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
@@ -1241,35 +1322,33 @@ export const ProposalPreview: React.FC<ProposalPreviewProps> = ({
                 </div>
               )}
 
-        <ProposalPreviewSubAndHybrid
-          activeCustomer={activeCustomer}
-          generalHiPreedSummary={generalHiPreedSummary}
-          activePlan={activePlan}
-          cardMonthlyDiscount={cardMonthlyDiscount}
-          currentCard={currentCard}
-          currentCardTier={currentCardTier}
-          finalMonthlyFee={finalMonthlyFee}
-          finalTotal60Fee={finalTotal60Fee}
-          fmtCat={fmtCat}
-          fmtModel={fmtModel}
-          generalSummary={generalSummary}
-          hasBothPlans={hasBothPlans}
-          hiPlusMonthlySupport={hiPlusMonthlySupport}
-          hybridCombinedNetTotal={hybridCombinedNetTotal}
-          hybridTotalDiscountAndSupport={hybridTotalDiscountAndSupport}
-          periodLabel={periodLabel}
-          representativePeriod={representativePeriod}
-          state={state}
-          subCardBenefitLabel={subCardBenefitLabel}
-          subCashbackDetailParts={subCashbackDetailParts}
-          subFormulaText={subFormulaText}
-          subHeaderTitle={subHeaderTitle}
-          subSummary={subSummary}
-          totalBaseMonthly={totalBaseMonthly}
-          totalPrincipal={totalPrincipal}
-        />
-                </>
-              )}
+              <ProposalPreviewSubAndHybrid
+                activeCustomer={activeCustomer}
+                generalHiPreedSummary={generalHiPreedSummary}
+                activePlan={activePlan}
+                cardMonthlyDiscount={cardMonthlyDiscount}
+                currentCard={currentCard}
+                currentCardTier={currentCardTier}
+                finalMonthlyFee={finalMonthlyFee}
+                finalTotal60Fee={finalTotal60Fee}
+                fmtCat={fmtCat}
+                fmtModel={fmtModel}
+                generalSummary={generalSummary}
+                hasBothPlans={hasBothPlans}
+                hiPlusMonthlySupport={hiPlusMonthlySupport}
+                hybridCombinedNetTotal={hybridCombinedNetTotal}
+                hybridTotalDiscountAndSupport={hybridTotalDiscountAndSupport}
+                periodLabel={periodLabel}
+                representativePeriod={representativePeriod}
+                state={state}
+                subCardBenefitLabel={subCardBenefitLabel}
+                subCashbackDetailParts={subCashbackDetailParts}
+                subFormulaText={subFormulaText}
+                subHeaderTitle={subHeaderTitle}
+                subSummary={subSummary}
+                totalBaseMonthly={totalBaseMonthly}
+                totalPrincipal={totalPrincipal}
+              />
             </div>
           )}
 
