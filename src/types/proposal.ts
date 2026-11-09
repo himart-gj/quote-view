@@ -149,12 +149,34 @@ export const GENERAL_HIPREED_PLANS: GeneralHiPreedPlanSpec[] = [
   },
 ];
 
-export function calculateGeneralHiPreedSummary(counts: GeneralHiPreedCounts) {
+export function calculateGeneralHiPreedSummary(
+  counts: GeneralHiPreedCounts,
+  hidden = false
+) {
+  if (hidden) {
+    return {
+      totalAccounts: 0,
+      totalSupport: 0,
+      monthlyInstallment35: 0,
+      totalMonthlyDeposit: 0,
+      totalMaturityRefund: 0,
+      comboParts: [] as string[],
+      comboLabel: '',
+      activePlans: [] as (GeneralHiPreedPlanSpec & {
+        count: number;
+        subSupportAmount: number;
+        subMonthlyInstallment35: number;
+        subMonthlyDeposit: number;
+        subMaturityRefund: number;
+      })[],
+    };
+  }
+  const safeCounts = counts || { hf75: 0, hf150: 0, hf225: 0, hf300: 0 };
   const totalAccounts =
-    (counts.hf75 || 0) +
-    (counts.hf150 || 0) +
-    (counts.hf225 || 0) +
-    (counts.hf300 || 0);
+    (safeCounts.hf75 || 0) +
+    (safeCounts.hf150 || 0) +
+    (safeCounts.hf225 || 0) +
+    (safeCounts.hf300 || 0);
 
   let totalSupport = 0;
   let monthlyInstallment35 = 0;
@@ -171,7 +193,7 @@ export function calculateGeneralHiPreedSummary(counts: GeneralHiPreedCounts) {
   })[] = [];
 
   GENERAL_HIPREED_PLANS.forEach((plan) => {
-    const count = counts[plan.id] || 0;
+    const count = safeCounts[plan.id] || 0;
     if (count > 0) {
       const subSupportAmount = plan.supportAmount * count;
       const subMonthlyInstallment35 = plan.monthlyInstallment35 * count;
@@ -209,17 +231,6 @@ export function calculateGeneralHiPreedSummary(counts: GeneralHiPreedCounts) {
   };
 }
 
-/**
- * 실제 카드 결제가(payPrice) 기준 금액대별 자동 캐시백 계산
- * 2,000만원 이상: 1,000,000원
- * 1,500만원 이상: 750,000원
- * 1,200만원 이상: 600,000원
- * 1,000만원 이상: 500,000원
- * 700만원 이상: 350,000원
- * 500만원 이상: 250,000원
- * 300만원 이상: 150,000원
- * 300만원 미만 또는 카드 '미정': 0원
- */
 export function calculateAutoTierCashback(
   payPrice: number,
   cardType: GeneralCardType
@@ -235,11 +246,6 @@ export function calculateAutoTierCashback(
   return 0;
 }
 
-/**
- * 구독구매 전용: 삼성제휴카드 · 신한제휴카드 선택 시 구독원금 합계(totalPrincipal)가
- * 300만원 이상이면 일반 견적기와 동일한 금액대별 캐시백 구간을 자동 지급합니다.
- * (우리카드 · 롯데카드 · 미적용 또는 원금 300만원 미만: 0원)
- */
 export function isSubTierCashbackEligibleCard(
   cardId?: AffiliateCardId | string
 ): boolean {
@@ -272,6 +278,7 @@ export interface GeneralPlanData {
   extraCashback: number;
   extraBenefits: GeneralExtraBenefitItem[];
   generalHiPreedCounts: GeneralHiPreedCounts;
+  hideHiPreed?: boolean;
 
   // 구독구매 필드 통합 (1안 / 2안 개별 저장·복원용)
   items: SubscriptionItem[];
@@ -283,6 +290,7 @@ export interface GeneralPlanData {
   selectedCardId: AffiliateCardId;
   selectedCardTierId: string;
   hiPlusCounts: HiPlusCounts;
+  hideSubPreed?: boolean;
   subAutoTierCashback?: boolean;
   subManualTierCashback?: number;
   subExtraCashback?: number;
@@ -308,6 +316,7 @@ export function extractGeneralPlanData(
       hf300: 0,
       ...(source.generalHiPreedCounts || {}),
     },
+    hideHiPreed: Boolean(source.hideHiPreed),
 
     items: (source.items || []).map((it) => ({
       ...it,
@@ -333,6 +342,7 @@ export function extractGeneralPlanData(
       hi108: 0,
       ...(source.hiPlusCounts || {}),
     },
+    hideSubPreed: Boolean(source.hideSubPreed),
     subAutoTierCashback: source.subAutoTierCashback ?? true,
     subManualTierCashback: Math.max(0, Number(source.subManualTierCashback) || 0),
     subExtraCashback: Math.max(0, Number(source.subExtraCashback) || 0),
@@ -370,6 +380,7 @@ export function cloneGeneralPlanData(
       hf300: 0,
       ...(source.generalHiPreedCounts || {}),
     },
+    hideHiPreed: Boolean(source.hideHiPreed),
 
     items: (source.items || []).map((it, idx) => ({
       ...it,
@@ -398,6 +409,7 @@ export function cloneGeneralPlanData(
       hi108: 0,
       ...(source.hiPlusCounts || {}),
     },
+    hideSubPreed: Boolean(source.hideSubPreed),
     subAutoTierCashback: source.subAutoTierCashback ?? true,
     subManualTierCashback: Math.max(0, Number(source.subManualTierCashback) || 0),
     subExtraCashback: Math.max(0, Number(source.subExtraCashback) || 0),
@@ -412,7 +424,6 @@ export function switchGeneralPlanInState(
 
   const currentSnapshot = extractGeneralPlanData(prev);
   if (targetPlan === 2) {
-    // 1안 -> 2안으로 전환: 현재 값을 generalPlan1에 저장하고 generalPlan2를 활성 필드로 로드
     const nextActive = extractGeneralPlanData(prev.generalPlan2);
     return {
       ...prev,
@@ -421,7 +432,6 @@ export function switchGeneralPlanInState(
       ...nextActive,
     };
   } else {
-    // 2안 -> 1안으로 전환: 현재 값을 generalPlan2에 저장하고 generalPlan1을 활성 필드로 로드
     const nextActive = extractGeneralPlanData(prev.generalPlan1);
     return {
       ...prev,
@@ -456,7 +466,6 @@ export function calculateGeneralPurchaseSummary(state: GeneralPlanData) {
   );
   const displayItems = validItems.length > 0 ? validItems : items;
 
-  // 총 행사가 합계
   const sum = displayItems.reduce(
     (acc, it) =>
       acc +
@@ -470,7 +479,6 @@ export function calculateGeneralPurchaseSummary(state: GeneralPlanData) {
   const pointUsed = Math.max(0, Number(state.pointUsed) || 0);
   const remainingPoints = Math.max(0, earnedPoints - pointUsed);
 
-  // 추가 혜택 분리 ('discount' = 즉시할인성 추가혜택, 'etc' = 기타 캐시백/사은품 등 추가혜택)
   const extraBenefits = state.extraBenefits || [];
   const extraDiscountItems = extraBenefits.filter(
     (b) =>
@@ -492,12 +500,12 @@ export function calculateGeneralPurchaseSummary(state: GeneralPlanData) {
     0
   );
 
-  // 1단계 차감: 즉시할인 혜택 합계 = 기본 즉시할인 + 추가혜택 중 '즉시할인' + 포인트 즉시사용액
   const totalStep1InstantDiscount =
     instantDiscount + extraDiscountSum + pointUsed;
 
   const freedSummary = calculateGeneralHiPreedSummary(
-    state.generalHiPreedCounts || { hf75: 0, hf150: 0, hf225: 0, hf300: 0 }
+    state.generalHiPreedCounts || { hf75: 0, hf150: 0, hf225: 0, hf300: 0 },
+    Boolean(state.hideHiPreed)
   );
   const hiFreedAccounts = freedSummary.totalAccounts;
   const hiFreedSupport = freedSummary.totalSupport;
@@ -505,28 +513,20 @@ export function calculateGeneralPurchaseSummary(state: GeneralPlanData) {
   const hiFreedMonthlyDeposit = freedSummary.totalMonthlyDeposit;
   const hiFreedMaturityRefund = freedSummary.totalMaturityRefund;
 
-  // 고객 실 결제부담금 (실결제가: payPrice)
   const payPrice = Math.max(
     0,
     sum - totalStep1InstantDiscount - hiFreedSupport
   );
 
-  // 금액대별 캐시백: 카드 선택 시('미정'이 아닐 때) 실결제가(payPrice) 기준으로 자동 계산 (수동 수정 시 수동값 반영)
   const tierCashback =
     state.autoTierCashback !== false
       ? calculateAutoTierCashback(payPrice, state.generalCardType)
       : Math.max(0, Number(state.manualTierCashback) || 0);
 
-  // 배송익월 추가 캐시백
   const extraCashback = Math.max(0, Number(state.extraCashback) || 0);
-
-  // 2단계 차감 1: 캐시백 혜택 합계 (금액대별 캐시백 + 배송익월 추가 캐시백)
   const totalStep2Cashback = tierCashback + extraCashback;
-
-  // 2단계 차감 2: 추가 혜택 합계 (즉시할인 외 기타 추가혜택 + 잔여 적립포인트)
   const totalStep2ExtraBenefit = extraEtcSum + remainingPoints;
 
-  // 최종 혜택가 (체감 구매가: rawNet)
   const rawNet =
     sum -
     totalStep1InstantDiscount -
@@ -594,7 +594,6 @@ export function getSubscriptionPeriodSummary(
     ? '60개월'
     : '36·60개월 맞춤';
 
-  // 대표 개월수: 60개월 품목이 하나라도 있으면 60, 전부 36개월이면 36
   const representativePeriod: SubscriptionPeriod = all36 ? 36 : 60;
 
   const totalBaseMonthly = list.reduce(
@@ -602,7 +601,6 @@ export function getSubscriptionPeriodSummary(
     0
   );
 
-  // 각 구독 품목의 개별 원금 (전산 OCR contractAmount 반올림 오차 ±period*5원 이내면 전산 원금 우선 사용하여 CRM 총판·실판 원금과 1원 단위 일치 보장)
   const totalPrincipal = list.reduce((sum, item) => {
     const itemPeriod: SubscriptionPeriod =
       item.period === 36 ? 36 : item.period === 60 ? 60 : safeFallback;
@@ -673,11 +671,11 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
 
   const hiSummary = calculateHiPlusSummary(
     planData.hiPlusCounts || { hi72: 0, hi90: 0, hi108: 0 },
-    representativePeriod
+    representativePeriod,
+    Boolean(planData.hideSubPreed)
   );
   const hiPlusMonthly = hiSummary.monthlyHiPlusSupport;
 
-  // 삼성·신한 제휴카드 구독원금 300만원 이상 금액대별 캐시백 + 구독 추가 캐시백
   const isTierCashbackCard = isSubTierCashbackEligibleCard(planData.selectedCardId);
   const autoSubTierCashback = calculateAutoSubscriptionTierCashback(
     totalPrincipal,
@@ -690,11 +688,8 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
   const subExtraCashback = Math.max(0, Number(planData.subExtraCashback) || 0);
   const totalSubCashback = subTierCashback + subExtraCashback;
 
-  // 일시 지급 캐시백(금액대별 캐시백 + 구독 추가 캐시백)은 1회 입금이므로
-  // 월환산으로 나누지 않고 최종 기간 총 체감가(finalTotalFee)에서만 일시 차감합니다.
   const monthlyCashbackEquiv = 0;
 
-  // 매월 실제 청구·월지원 차감 후 월 체감 구독료 (제휴카드 월 할인 + 구독프리드 월 지원금)
   const monthlyBillingAfterCardAndHiPlus =
     totalBaseMonthly - cardDiscount - hiPlusMonthly;
 
@@ -888,6 +883,7 @@ export interface ProposalState {
   extraCashback: number;
   extraBenefits: GeneralExtraBenefitItem[];
   generalHiPreedCounts: GeneralHiPreedCounts;
+  hideHiPreed?: boolean;
 
   // 구독구매 상태
   items: SubscriptionItem[];
@@ -899,6 +895,7 @@ export interface ProposalState {
   selectedCardId: AffiliateCardId;
   selectedCardTierId: string;
   hiPlusCounts: HiPlusCounts;
+  hideSubPreed?: boolean;
   subAutoTierCashback?: boolean;
   subManualTierCashback?: number;
   subExtraCashback?: number;
@@ -997,29 +994,49 @@ export const HI_PLUS_PLANS: HiPlusPlanSpec[] = [
 
 export function calculateHiPlusSummary(
   counts: HiPlusCounts,
-  period: SubscriptionPeriod
+  period: SubscriptionPeriod,
+  hidden = false
 ) {
-  const totalAccounts = counts.hi72 + counts.hi90 + counts.hi108;
+  if (hidden) {
+    return {
+      totalAccounts: 0,
+      monthlyHiPlusSupport: 0,
+      totalHiPlusSupport: 0,
+      totalMonthlyDeposit: 0,
+      totalMaturityRefund: 0,
+      comboLabel: '',
+      comboParts: [] as string[],
+      activePlans: [] as {
+        plan: HiPlusPlanSpec;
+        count: number;
+        monthlySupport: number;
+        totalSupport: number;
+      }[],
+    };
+  }
+  const safeCounts = counts || { hi72: 0, hi90: 0, hi108: 0 };
+  const totalAccounts =
+    (safeCounts.hi72 || 0) + (safeCounts.hi90 || 0) + (safeCounts.hi108 || 0);
 
   const monthlyHiPlusSupport = HI_PLUS_PLANS.reduce((sum, plan) => {
-    const count = counts[plan.id] || 0;
+    const count = safeCounts[plan.id] || 0;
     const unitMonthly =
       period === 36 ? plan.monthlySupport36 : plan.monthlySupport60;
     return sum + count * unitMonthly;
   }, 0);
 
   const totalHiPlusSupport = HI_PLUS_PLANS.reduce((sum, plan) => {
-    const count = counts[plan.id] || 0;
+    const count = safeCounts[plan.id] || 0;
     return sum + count * plan.totalSupport;
   }, 0);
 
   const totalMonthlyDeposit = HI_PLUS_PLANS.reduce((sum, plan) => {
-    const count = counts[plan.id] || 0;
+    const count = safeCounts[plan.id] || 0;
     return sum + count * plan.monthlyDeposit1to90;
   }, 0);
 
   const totalMaturityRefund = HI_PLUS_PLANS.reduce((sum, plan) => {
-    const count = counts[plan.id] || 0;
+    const count = safeCounts[plan.id] || 0;
     return sum + count * plan.maturityRefund;
   }, 0);
 
@@ -1032,7 +1049,7 @@ export function calculateHiPlusSummary(
   }[] = [];
 
   HI_PLUS_PLANS.forEach((plan) => {
-    const count = counts[plan.id] || 0;
+    const count = safeCounts[plan.id] || 0;
     if (count > 0) {
       const unitMonthly =
         period === 36 ? plan.monthlySupport36 : plan.monthlySupport60;
@@ -1144,6 +1161,7 @@ export function resolveComparisonModePlanData(
       extraCashback: genFallback.extraCashback,
       extraBenefits: genFallback.extraBenefits,
       generalHiPreedCounts: genFallback.generalHiPreedCounts,
+      hideHiPreed: genFallback.hideHiPreed,
       items: subFallback.items,
       subscriptionPeriod: subFallback.subscriptionPeriod,
       careService: subFallback.careService,
@@ -1153,6 +1171,7 @@ export function resolveComparisonModePlanData(
       selectedCardId: subFallback.selectedCardId,
       selectedCardTierId: subFallback.selectedCardTierId,
       hiPlusCounts: subFallback.hiPlusCounts,
+      hideSubPreed: subFallback.hideSubPreed,
       subAutoTierCashback: subFallback.subAutoTierCashback,
       subManualTierCashback: subFallback.subManualTierCashback,
       subExtraCashback: subFallback.subExtraCashback,
@@ -1182,6 +1201,7 @@ export function resolveComparisonModePlanData(
           extraCashback: genFallback.extraCashback,
           extraBenefits: genFallback.extraBenefits,
           generalHiPreedCounts: genFallback.generalHiPreedCounts,
+          hideHiPreed: genFallback.hideHiPreed,
         }
       : {}),
     ...(needSubFallback
@@ -1195,11 +1215,33 @@ export function resolveComparisonModePlanData(
           selectedCardId: subFallback.selectedCardId,
           selectedCardTierId: subFallback.selectedCardTierId,
           hiPlusCounts: subFallback.hiPlusCounts,
+          hideSubPreed: subFallback.hideSubPreed,
           subAutoTierCashback: subFallback.subAutoTierCashback,
           subManualTierCashback: subFallback.subManualTierCashback,
           subExtraCashback: subFallback.subExtraCashback,
         }
       : {}),
+  };
+}
+
+export function switchQuoteModeInState(
+  prev: ProposalState,
+  targetMode: QuoteMode
+): ProposalState {
+  if (prev.quoteMode === targetMode) return prev;
+  const currentSnapshot = extractGeneralPlanData(prev);
+  const targetData = resolveComparisonModePlanData(prev, targetMode);
+  return {
+    ...prev,
+    quoteMode: targetMode,
+    modeConfigs: {
+      ...(prev.modeConfigs || {}),
+      [prev.quoteMode]: currentSnapshot,
+      [targetMode]: targetData,
+    },
+    activeGeneralPlan: 1,
+    generalPlan1: targetData,
+    ...targetData,
   };
 }
 
@@ -1230,6 +1272,7 @@ export const createEmptyGeneralPlanData = (
     hf225: 0,
     hf300: 0,
   },
+  hideHiPreed: false,
   items: [
     {
       id: `sub-${mode}-p${planNum}-1`,
@@ -1252,6 +1295,7 @@ export const createEmptyGeneralPlanData = (
     hi90: 0,
     hi108: 0,
   },
+  hideSubPreed: false,
   subAutoTierCashback: true,
   subManualTierCashback: 0,
   subExtraCashback: 0,

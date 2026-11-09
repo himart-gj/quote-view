@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AFFILIATE_CARDS, AffiliateCardId, calculateGeneralHiPreedSummary, calculateGeneralPurchaseSummary, calculateHiPlusSummary, calculateSubscriptionSummary, copyPlan1ToPlan2InState, AFFILIATE_GENERAL_CARD_OPTIONS, GENERAL_CATEGORY_PRESETS, isAffiliateGeneralCardType, MAX_LIFECARE_TOTAL_ACCOUNTS, GENERAL_HIPREED_PLANS, GeneralExtraBenefitItem, GeneralExtraBenefitType, GeneralHiPreedKey, GeneralPurchaseItem, getGeneralPlan1And2Summaries, getSubscriptionPeriodSummary, HiPlusKey, getActiveCompareModes, ProposalState, QuoteMode, SUB_CARE_OPTIONS, SubscriptionItem, SubscriptionPeriod, switchGeneralPlanInState } from '../types/proposal';
+import { AFFILIATE_CARDS, AffiliateCardId, calculateGeneralHiPreedSummary, calculateGeneralPurchaseSummary, calculateHiPlusSummary, calculateSubscriptionSummary, copyPlan1ToPlan2InState, AFFILIATE_GENERAL_CARD_OPTIONS, GENERAL_CATEGORY_PRESETS, isAffiliateGeneralCardType, MAX_LIFECARE_TOTAL_ACCOUNTS, GENERAL_HIPREED_PLANS, GeneralExtraBenefitItem, GeneralExtraBenefitType, GeneralHiPreedKey, GeneralPurchaseItem, getGeneralPlan1And2Summaries, getSubscriptionPeriodSummary, HiPlusKey, ProposalState, QuoteMode, SUB_CARE_OPTIONS, SubscriptionItem, SubscriptionPeriod, switchGeneralPlanInState } from '../types/proposal';
 import { SpringNumberFlow } from './SpringNumberFlow';
 import { getStoredGeminiApiKey, setStoredGeminiApiKey } from '../utils/aiImageParser';
-import { ArrowLeft, Camera, Check, Copy, CreditCard, KeyRound, Loader2, Minus, Plus, RotateCcw, Save, ShieldCheck, ShoppingBag, User, X } from 'lucide-react';
+import { ArrowLeft, Camera, Check, Copy, CreditCard, Eye, EyeOff, KeyRound, Loader2, Minus, Plus, RotateCcw, Save, ShieldCheck, ShoppingBag, User, X } from 'lucide-react';
 import { ControlPanelSubscriptionSection } from './ControlPanelSubscriptionSection';
 import { QuoteModeComparisonControlBar } from './MultiModeComparisonSection';
 
@@ -113,7 +113,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             } else if (state.quoteMode === 'subscription') {
               onParseImage(file);
             } else {
-              // 혼합견적(hybrid) 모드: 마지막으로 클릭/포커스한 카드 기준 실행
               if (lastFocusedSection === 'general' && onParseGeneralImage) {
                 onParseGeneralImage(file);
               } else {
@@ -148,7 +147,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   // ==================== 일반구매 & 구독구매 1안/2안 요약 핸들러 ====================
   const generalSummary = calculateGeneralPurchaseSummary(state);
   const generalHiPreedSummary = calculateGeneralHiPreedSummary(
-    state.generalHiPreedCounts
+    state.generalHiPreedCounts,
+    Boolean(state.hideHiPreed)
   );
   const { plan1Summary, plan2Summary, plan1SubSummary, plan2SubSummary } =
     getGeneralPlan1And2Summaries(state);
@@ -321,7 +321,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         (counts.hf225 || 0) +
         (counts.hf300 || 0);
       const hybridSubTotal =
-        prev.quoteMode === 'hybrid'
+        prev.quoteMode === 'hybrid' && !prev.hideSubPreed
           ? (prev.hiPlusCounts.hi72 || 0) +
             (prev.hiPlusCounts.hi90 || 0) +
             (prev.hiPlusCounts.hi108 || 0)
@@ -352,6 +352,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         hf300: 0,
       },
     }));
+  };
+
+  const handleToggleHideHiPreed = () => {
+    onChange((prev) => {
+      const nextHidden = !prev.hideHiPreed;
+      return {
+        ...prev,
+        hideHiPreed: nextHidden,
+        generalPlan1: { ...prev.generalPlan1, hideHiPreed: nextHidden },
+        generalPlan2: { ...prev.generalPlan2, hideHiPreed: nextHidden },
+      };
+    });
   };
 
   // ==================== 구독구매 핸들러 ====================
@@ -482,7 +494,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
         (prev.hiPlusCounts.hi90 || 0) +
         (prev.hiPlusCounts.hi108 || 0);
       const hybridGenTotal =
-        prev.quoteMode === 'hybrid'
+        prev.quoteMode === 'hybrid' && !prev.hideHiPreed
           ? (prev.generalHiPreedCounts.hf75 || 0) +
             (prev.generalHiPreedCounts.hf150 || 0) +
             (prev.generalHiPreedCounts.hf225 || 0) +
@@ -514,9 +526,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   const currentCard = AFFILIATE_CARDS.find(
     (c) => c.id === state.selectedCardId
   );
-  const currentCardTier = currentCard?.tiers.find(
-    (t) => t.id === state.selectedCardTierId
-  );
   const subPeriodInfo = getSubscriptionPeriodSummary(
     state.items,
     state.subscriptionPeriod
@@ -528,7 +537,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
   const hiSummary = calculateHiPlusSummary(
     state.hiPlusCounts,
-    representativePeriod
+    representativePeriod,
+    Boolean(state.hideSubPreed)
   );
 
   const cardDiscount = liveSubSummary.cardDiscount;
@@ -1175,21 +1185,23 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
               )}
             </div>
 
-            {/* 3. 하이프리드 75 / 150 / 225 / 300 선택 */}
+            {/* 3. 하이프리드 75 / 150 / 225 / 300 선택 + 숨기기/보이기 토글 */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
-              <div className="flex flex-wrap items-center justify-between gap-1">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
                 <label className="text-xs sm:text-sm font-black text-slate-900 flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-blue-600" />
                   3. 하이프리드 (웅진프리드라이프)
                 </label>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                    {state.quoteMode === 'hybrid'
-                      ? `합산 ${generalHiPreedSummary.totalAccounts + hiSummary.totalAccounts}개 / 최대 8개`
-                      : `총 ${generalHiPreedSummary.totalAccounts}개 / 최대 8개`}{' '}
-                    (-{generalHiPreedSummary.totalSupport.toLocaleString()}원)
-                  </span>
-                  {generalHiPreedSummary.totalAccounts > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {!state.hideHiPreed && (
+                    <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      {state.quoteMode === 'hybrid'
+                        ? `합산 ${generalHiPreedSummary.totalAccounts + hiSummary.totalAccounts}개 / 최대 8개`
+                        : `총 ${generalHiPreedSummary.totalAccounts}개 / 최대 8개`}{' '}
+                      (-{generalHiPreedSummary.totalSupport.toLocaleString()}원)
+                    </span>
+                  )}
+                  {!state.hideHiPreed && generalHiPreedSummary.totalAccounts > 0 && (
                     <button
                       type="button"
                       onClick={handleResetGeneralHiPreed}
@@ -1198,71 +1210,108 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       <RotateCcw className="w-3 h-3" /> 미적용(초기화)
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={handleToggleHideHiPreed}
+                    title="숨김 설정 시 내 화면과 고객이 받는 공유 견적서 화면에서 일반 하이프리드 영역이 완전히 숨겨집니다"
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-black border transition cursor-pointer ${
+                      state.hideHiPreed
+                        ? 'bg-slate-800 text-amber-300 border-slate-700 shadow-2xs'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    {state.hideHiPreed ? (
+                      <>
+                        <EyeOff className="w-3 h-3 text-amber-300" />
+                        <span>일반프리드 숨김중 (보이기)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-3 h-3 text-blue-600" />
+                        <span>일반프리드 숨기기</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
-                {GENERAL_HIPREED_PLANS.map((plan) => {
-                  const count = state.generalHiPreedCounts[plan.id] || 0;
-                  const active = count > 0;
-                  const canAdd =
-                    generalHiPreedSummary.totalAccounts +
-                      (state.quoteMode === 'hybrid' ? hiSummary.totalAccounts : 0) <
-                    MAX_LIFECARE_TOTAL_ACCOUNTS;
+              {state.hideHiPreed ? (
+                <div className="rounded-2xl bg-slate-100 border border-slate-200 px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs">
+                  <span className="font-bold text-slate-600">
+                    🙈 일반 하이프리드 영역이 숨겨진 상태입니다 (제안서 및 고객 공유 화면에서도 표시되지 않습니다)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleToggleHideHiPreed}
+                    className="px-2.5 py-1 rounded-xl bg-blue-600 text-white text-[11px] font-black shrink-0 cursor-pointer"
+                  >
+                    다시 보이기
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
+                  {GENERAL_HIPREED_PLANS.map((plan) => {
+                    const count = state.generalHiPreedCounts[plan.id] || 0;
+                    const active = count > 0;
+                    const canAdd =
+                      generalHiPreedSummary.totalAccounts +
+                        (state.quoteMode === 'hybrid' ? hiSummary.totalAccounts : 0) <
+                      MAX_LIFECARE_TOTAL_ACCOUNTS;
 
-                  return (
-                    <div
-                      key={plan.id}
-                      className={`p-2 sm:p-2.5 rounded-2xl border-2 flex flex-col justify-between transition ${
-                        active
-                          ? 'bg-blue-50/70 border-blue-600 shadow-xs'
-                          : 'bg-white border-slate-200'
-                      }`}
-                    >
-                      <div className="text-center mb-1.5 sm:mb-2">
-                        <div
-                          className={`text-[11px] sm:text-xs font-black whitespace-nowrap ${
-                            active ? 'text-blue-700' : 'text-slate-800'
-                          }`}
-                        >
-                          {plan.buttonLabel}
+                    return (
+                      <div
+                        key={plan.id}
+                        className={`p-2 sm:p-2.5 rounded-2xl border-2 flex flex-col justify-between transition ${
+                          active
+                            ? 'bg-blue-50/70 border-blue-600 shadow-xs'
+                            : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        <div className="text-center mb-1.5 sm:mb-2">
+                          <div
+                            className={`text-[11px] sm:text-xs font-black whitespace-nowrap ${
+                              active ? 'text-blue-700' : 'text-slate-800'
+                            }`}
+                          >
+                            {plan.buttonLabel}
+                          </div>
+                          <div className="text-[10px] sm:text-[11px] font-extrabold text-rose-600 mt-0.5 whitespace-nowrap">
+                            -{(plan.supportAmount / 10000).toLocaleString()}만원 지원
+                          </div>
                         </div>
-                        <div className="text-[10px] sm:text-[11px] font-extrabold text-rose-600 mt-0.5 whitespace-nowrap">
-                          -{(plan.supportAmount / 10000).toLocaleString()}만원 지원
+
+                        <div className="flex items-center justify-between bg-slate-50 rounded-xl p-1 border border-slate-200">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleAdjustGeneralHiPreed(plan.id, -1)
+                            }
+                            disabled={count === 0}
+                            className="w-6 h-6 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center disabled:opacity-30 cursor-pointer"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span
+                            className={`text-xs font-black ${
+                              active ? 'text-blue-700' : 'text-slate-700'
+                            }`}
+                          >
+                            {count}개
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustGeneralHiPreed(plan.id, 1)}
+                            disabled={!canAdd}
+                            className="w-6 h-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center disabled:opacity-30 cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
-
-                      <div className="flex items-center justify-between bg-slate-50 rounded-xl p-1 border border-slate-200">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleAdjustGeneralHiPreed(plan.id, -1)
-                          }
-                          disabled={count === 0}
-                          className="w-6 h-6 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center disabled:opacity-30 cursor-pointer"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span
-                          className={`text-xs font-black ${
-                            active ? 'text-blue-700' : 'text-slate-700'
-                          }`}
-                        >
-                          {count}개
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleAdjustGeneralHiPreed(plan.id, 1)}
-                          disabled={!canAdd}
-                          className="w-6 h-6 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center disabled:opacity-30 cursor-pointer"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* 일반구매 하단 실시간 요약 & [1안 vs 2안] 비교 박스 (단독 일반 & 혼합견적 모두 표시) */}

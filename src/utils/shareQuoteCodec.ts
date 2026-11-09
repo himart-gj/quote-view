@@ -1,14 +1,14 @@
 import {
   AffiliateCardId,
   extractGeneralPlanData,
-  getActiveCompareModes,
-  resolveComparisonModePlanData,
   GENERAL_CARD_OPTIONS,
   GeneralCardType,
   GeneralExtraBenefitItem,
   GeneralPlanData,
+  getActiveCompareModes,
   ProposalState,
   QuoteMode,
+  resolveComparisonModePlanData,
   SUB_CARE_OPTIONS,
   SubscriptionPeriod,
 } from '../types/proposal';
@@ -37,9 +37,10 @@ export interface EncodedQuoteLinks {
   /** 서버 단축(/q/Ab3x9Z) 또는 외부 단축(is.gd) 적용된 최종 최단 링크 (폴백 시 compactUrl) */
   shortUrl: string;
   /** 적용된 단축 방식 ('server' | 'external' | 'compact') */
-  mode: 'server' | 'external' | 'compact';
+  mode?: 'server' | 'external' | 'compact';
   /** 내부 압축 토큰 */
-  token: string;
+  token?: string;
+  isShortened?: boolean;
 }
 
 const DEFAULT_STORE_NAME = '롯데하이마트 경기광주점';
@@ -263,7 +264,6 @@ type PackedMoney = number | string;
 function packMoney(val?: number): PackedMoney {
   const n = Math.max(0, Math.round(Number(val) || 0));
   if (n === 0) return 0;
-  // 만원 단위로 딱 떨어지면 숫자로 축약(3450000 -> 345), 원 단위 단수가 있으면 문자열로 1원 단위 보존
   if (n % 10000 === 0) return n / 10000;
   return String(n);
 }
@@ -373,6 +373,9 @@ function packPlanTuple(plan: GeneralPlanData): any[] {
       ? ''
       : plan.warrantyType;
 
+  const hidePreedMask =
+    (plan.hideHiPreed ? 1 : 0) | (plan.hideSubPreed ? 2 : 0);
+
   return trimTrailingZeros([
     genTuples,
     subTuples,
@@ -396,6 +399,7 @@ function packPlanTuple(plan: GeneralPlanData): any[] {
     packMoney(plan.subManualTierCashback),
     packMoney(plan.subExtraCashback),
     warrantyStr,
+    hidePreedMask,
   ]);
 }
 
@@ -481,6 +485,7 @@ function unpackPlanTuple(tuple: any[], prefix: string): GeneralPlanData {
       : 'none';
 
   const rawHiPlus = Array.isArray(arr[17]) ? arr[17] : [0, 0, 0];
+  const hidePreedMask = Number(arr[22]) || 0;
 
   return {
     generalItems,
@@ -498,6 +503,7 @@ function unpackPlanTuple(tuple: any[], prefix: string): GeneralPlanData {
       hf225: Number(rawHp[2]) || 0,
       hf300: Number(rawHp[3]) || 0,
     },
+    hideHiPreed: Boolean(hidePreedMask & 1),
     items,
     subscriptionPeriod: subPeriod,
     careService,
@@ -512,6 +518,7 @@ function unpackPlanTuple(tuple: any[], prefix: string): GeneralPlanData {
       hi90: Number(rawHiPlus[1]) || 0,
       hi108: Number(rawHiPlus[2]) || 0,
     },
+    hideSubPreed: Boolean(hidePreedMask & 2),
     subAutoTierCashback: arr[18] === 0 ? false : true,
     subManualTierCashback: unpackMoney(arr[19]),
     subExtraCashback: unpackMoney(arr[20]),
@@ -664,9 +671,6 @@ export function unpackCompactQuoteV2(arr: any[]): SharedQuotePayload | null {
   };
 }
 
-/**
- * 현재 URL(?q=..., ?s=..., ?share=..., /q/:code, #share=...)에서 공유 정보를 추출합니다.
- */
 export function extractShareParamsFromLocation(
   searchStr?: string,
   hashStr?: string,
@@ -744,11 +748,6 @@ export function extractRawShareTokenFromUrl(
   return extracted.token || extracted.shortCode || null;
 }
 
-/**
- * 실제 매장 직원이 사용 중인 브라우저인지 검증 (Zero-Trust 기본 차단)
- * - 고객이나 외부인이 주소 뒤쪽(?s=...)을 지우고 시크릿 모드나 타 PC에서 루트 도메인으로 접속해도
- *   STAFF_VERIFIED_V2_KEY 또는 실제 직원 업무 데이터가 없으면 절대 통과하지 못합니다.
- */
 function hasVerifiedStaffFootprint(): boolean {
   if (typeof localStorage === 'undefined') return false;
   try {
@@ -762,7 +761,6 @@ function hasVerifiedStaffFootprint(): boolean {
       localStorage.setItem(STAFF_VERIFIED_V2_KEY, '1');
       return true;
     }
-    // AI Studio 개발/프리뷰 환경이거나 기존부터 실제 사용 중이던 직원 단말기 자동 승격
     const host =
       typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
     const isAiStudioPreview =
@@ -789,12 +787,6 @@ function hasVerifiedStaffFootprint(): boolean {
   return false;
 }
 
-/**
- * [3단계 Zero-Trust 엔트리 판별기 - main.tsx 최상단 동기 실행]
- * 1) 'customer-quote': URL에 견적 토큰(?s=, ?q=, /q/, ?share=)이 있거나 고객 뷰어 잠금 상태일 때 -> 고객 전용 견적서만 표시
- * 2) 'public-gate': 누군가 깃허브 기본 주소에서 뒤쪽 파라미터를 지우고 접속했을 때(비인증 기기·시크릿모드·타 PC) -> 직원용 App.tsx 로드 자체를 원천 차단하고 안내 화면만 표시!
- * 3) 'staff-app': 인증된 직원 기기에서만 본 앱(App.tsx) 실행
- */
 export function resolveBootEntryMode(): BootEntryMode {
   if (typeof window === 'undefined') return 'staff-app';
 
@@ -884,9 +876,6 @@ export function loadCachedCustomerQuotePayload(): SharedQuotePayload | null {
   return null;
 }
 
-/**
- * V2 초경량 무손실 토큰 생성 ('2_' + base64url — 점(.)이나 특수기호가 전혀 없어 모든 문자앱 자동링크 100% 호환)
- */
 export async function encodeCompactQuoteToken(
   payload: SharedQuotePayload
 ): Promise<string> {
@@ -918,9 +907,6 @@ export async function encodeCompactQuoteToken(
   return '2u_' + bytesToBase64Url(rawBytes);
 }
 
-/**
- * 기본 초압축 URL 반환 (?s=2_...)
- */
 function resolveEffectiveViewerBaseUrl(): {
   baseUrl: string;
   usingCustomDomain: boolean;
@@ -945,12 +931,6 @@ export async function encodeSharedQuoteUrl(
   return `${baseUrl}?s=${token}`;
 }
 
-/**
- * [문자(SMS) 발송 최적화 3중 단축기]
- * 1순위: 자체 앱 서버 6자리 단축코드 (/q/Ab3x9Z — 약 35~42자, 외부 의존성 제로)
- * 2순위: 정적 배포(GitHub Pages 등) 환경에서 공개 단축 API(is.gd -> v.gd — 약 22자) 자동 호출
- * 3순위: 오프라인/사내망 환경에서도 문자 발송 가능한 점(.) 없는 V2 초압축 링크(?s=2_... — 기존 대비 82% 단축)
- */
 function shortenUrlViaJsonp(targetUrl: string): Promise<string | null> {
   if (typeof window === 'undefined' || typeof document === 'undefined' || !document.body) {
     return Promise.resolve(null);
@@ -1011,12 +991,13 @@ export async function createShortenedQuoteLinks(
   const { baseUrl, usingCustomDomain } = resolveEffectiveViewerBaseUrl();
   const compactUrl = `${baseUrl}?s=${token}`;
 
-  // [QA 06 네트워크 끊김 방어] 오프라인 상태에서는 타임아웃 대기(4.7초) 없이 0.01초 만에 초압축 링크 즉시 반환!
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return {
       shortUrl: compactUrl,
       compactUrl,
       isShortened: false,
+      mode: 'compact',
+      token,
     };
   }
 
@@ -1025,7 +1006,6 @@ export async function createShortenedQuoteLinks(
     typeof window !== 'undefined' &&
     /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/i.test(window.location.hostname);
 
-  // 1순위: 자체 서버 프록시 단축 (미니 뷰어 도메인 사용 시 서버에서 is.gd 외부 단축만 수행해 본 앱 주소 노출 0% 보장)
   if (typeof fetch !== 'undefined' && origin) {
     try {
       const ctrl = new AbortController();
@@ -1062,11 +1042,10 @@ export async function createShortenedQuoteLinks(
         }
       }
     } catch {
-      // 정적 호스팅(GitHub Pages 등)이거나 오프라인이면 2순위로 이동
+      // ignore
     }
   }
 
-  // 2순위: 공개 HTTPS 도메인(GitHub Pages 등)일 때 CORS fetch + JSONP 이중 폴백으로 is.gd / v.gd 단축 URL 생성
   if (!isLocal && /^https?:\/\//i.test(compactUrl)) {
     if (typeof fetch !== 'undefined') {
       const endpoints = [
@@ -1091,7 +1070,7 @@ export async function createShortenedQuoteLinks(
             }
           }
         } catch {
-          // JSONP 폴백으로 이어짐
+          // ignore
         }
       }
     }
@@ -1107,7 +1086,6 @@ export async function createShortenedQuoteLinks(
     }
   }
 
-  // 3순위: 점(.)이 제거된 순수 영숫자 V2 초압축 URL
   return {
     compactUrl,
     shortUrl: compactUrl,
@@ -1123,7 +1101,6 @@ export async function decodeSharedQuoteToken(
     const cleanToken = (token || '').trim();
     if (!cleanToken) return null;
 
-    // V2 튜플 코덱 ('2d_' 범용 deflate, '2_' deflate-raw, '2u_' 비압축)
     if (
       cleanToken.startsWith('2d_') ||
       cleanToken.startsWith('2_') ||
@@ -1160,7 +1137,6 @@ export async function decodeSharedQuoteToken(
       return null;
     }
 
-    // V1 하위 호환 ('z1.', 'u1.', raw base64)
     let jsonBytes: Uint8Array;
     if (cleanToken.startsWith('z1.')) {
       if (typeof DecompressionStream === 'undefined') {
@@ -1197,9 +1173,6 @@ export async function decodeSharedQuoteToken(
   }
 }
 
-/**
- * URL(/q/:code, ?q=..., ?s=..., ?share=..., #share=...)로부터 고객용 인터랙티브 견적 데이터 복원
- */
 export async function decodeSharedQuoteFromHash(
   hashOrSearchStr?: string
 ): Promise<SharedQuotePayload | null> {

@@ -1,7 +1,5 @@
 import React from 'react';
 import { CreditCard, Gift, Layers, RefreshCw, ShieldCheck, ShoppingBag, Sparkles } from 'lucide-react';
-import { getActiveCompareModes } from '../types/proposal';
-import { MultiModeComparisonSection } from './MultiModeComparisonSection';
 import { SpringNumberFlow } from './SpringNumberFlow';
 
 const sanitizeFiveYearText = (text?: string): string => {
@@ -33,21 +31,13 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
   return (
     <>
         {/* ==================== 메인 고객 맞춤 제안서 시트 (통합앱 고객 제안서 배열과 100% 동일 순서) ==================== */}
-        <section className="rounded-3xl bg-white border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4 text-slate-900">
-          {getActiveCompareModes(simState).length >= 2 ? (
-            <MultiModeComparisonSection
-              state={simState}
-              fmtCat={(v) => (v || '').trim()}
-              fmtModel={(v) => (v || '').trim()}
-            />
-          ) : (
-            <>
-          {/* -------------------- CASE A: 일반구매 단독 제안서 (가전 합계 -> 즉시할인 -> 결제가 -> 캐시백/추가혜택 -> 최종가) -------------------- */}
+        <section className="rounded-3xl bg-white border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4 text-slate-900 overflow-hidden">
+          {/* -------------------- CASE A: 일반구매 단독 제안서 -------------------- */}
           {simState.quoteMode === 'general' && (
             <div className="space-y-3.5 sm:space-y-4">
               {/* 1. 상단 제안서 헤더 */}
               <div className="bg-slate-900 text-white rounded-2xl px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 flex-wrap mb-1">
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-[11px] font-extrabold">
                       <ShoppingBag className="w-3 h-3 text-blue-400" />
@@ -59,11 +49,11 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                       </span>
                     )}
                   </div>
-                  <h2 className="text-base sm:text-xl font-black tracking-tight text-white">
+                  <h2 className="text-base sm:text-xl font-black tracking-tight text-white break-words">
                     {generalHeaderTitle}
                   </h2>
                 </div>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-[11px] font-extrabold text-white shrink-0">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-[11px] font-extrabold text-white shrink-0 whitespace-nowrap">
                   <CreditCard className="w-3.5 h-3.5 text-blue-400" />
                   적용 제휴카드:{' '}
                   {simState.generalCardType === '미정' ||
@@ -84,34 +74,34 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                   </span>
                 </div>
                 <div className="space-y-1.5">
-                  {generalSummary.displayItems.map((it, idx) => {
+                  {generalSummary.displayItems.map((it: any, idx: number) => {
                     const lineAmt =
                       (Number(it.unitPrice) || 0) *
                       Math.max(1, Number(it.quantity) || 1);
                     return (
                       <div
                         key={it.id || idx}
-                        className="flex items-center justify-between gap-2 bg-white px-3.5 py-2.5 rounded-xl border border-slate-200"
+                        className="flex items-start justify-between gap-2 bg-white px-3.5 py-2.5 rounded-xl border border-slate-200 overflow-hidden"
                       >
-                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                        <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
                           <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[11px] font-black flex items-center justify-center shrink-0">
                             {idx + 1}
                           </span>
-                          <span className="text-xs sm:text-sm font-black text-slate-900">
+                          <span className="text-xs sm:text-sm font-black text-slate-900 break-all">
                             {it.category || `가전품목 ${idx + 1}`}
                           </span>
                           {it.modelName && (
-                            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-mono">
+                            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-mono break-all">
                               {it.modelName}
                             </span>
                           )}
                           {it.quantity > 1 && (
-                            <span className="text-xs font-extrabold text-blue-600">
+                            <span className="text-xs font-extrabold text-blue-600 shrink-0">
                               × {it.quantity}개
                             </span>
                           )}
                         </div>
-                        <span className="text-xs sm:text-sm font-black text-slate-900 font-mono shrink-0">
+                        <span className="text-xs sm:text-sm font-black text-slate-900 font-mono shrink-0 whitespace-nowrap">
                           {lineAmt.toLocaleString()}원
                         </span>
                       </div>
@@ -122,7 +112,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                   <span className="text-xs sm:text-sm font-black text-slate-200">
                     총 합계 금액
                   </span>
-                  <span className="text-lg sm:text-2xl font-black text-white font-mono tracking-tight">
+                  <span className="text-lg sm:text-2xl font-black text-white font-mono tracking-tight shrink-0 whitespace-nowrap">
                     {generalSummary.sum.toLocaleString()}원
                   </span>
                 </div>
@@ -132,7 +122,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
               {generalSummary.totalDiscountAndBenefit > 0 && (
                 <div className="bg-slate-50 rounded-2xl border border-slate-200 p-3.5 sm:p-4 space-y-2.5">
                   {(generalSummary.totalStep1InstantDiscount > 0 ||
-                    generalSummary.hiFreedSupport > 0) && (
+                    (!simState.hideHiPreed && generalSummary.hiFreedSupport > 0)) && (
                     <>
                       <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-2">
                         <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-slate-900">
@@ -142,14 +132,14 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                           1단계: 고객 실 결제부담금 산출
                         </span>
                         <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">
-                          즉시할인 및 하이프리드 지원금 차감
+                          즉시할인 및 지원금 차감
                         </span>
                       </div>
 
                       <div className="space-y-2">
                         {generalSummary.totalStep1InstantDiscount > 0 && (
                           <div className="flex items-center justify-between gap-2 bg-white px-3.5 sm:px-4 py-3 rounded-xl border border-slate-200">
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <div className="text-xs sm:text-sm font-black text-slate-900">
                                 (-) 즉시할인 혜택
                               </div>
@@ -159,26 +149,26 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                                   : '기본 즉시할인 + 추가 즉시할인 + 포인트 즉시사용'}
                               </div>
                             </div>
-                            <div className="text-sm sm:text-lg font-black text-blue-600 font-mono shrink-0">
+                            <div className="text-sm sm:text-lg font-black text-blue-600 font-mono shrink-0 whitespace-nowrap">
                               -{generalSummary.totalStep1InstantDiscount.toLocaleString()}원
                             </div>
                           </div>
                         )}
 
-                        {generalSummary.hiFreedSupport > 0 && (
+                        {!simState.hideHiPreed && generalSummary.hiFreedSupport > 0 && (
                           <div className="flex items-center justify-between gap-2 bg-white px-3.5 sm:px-4 py-3 rounded-xl border border-blue-200">
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <div className="text-xs sm:text-sm font-black text-slate-900">
                                 (-) 하이프리드 지원금
                               </div>
                               <div className="text-[11px] font-bold text-blue-600 mt-0.5 leading-snug">
                                 {generalHiPreed.activePlans
-                                  .map((p) => `${p.name} (${p.count}건)`)
+                                  .map((p: any) => `${p.name} (${p.count}건)`)
                                   .join(' + ')}{' '}
                                 결합 지원
                               </div>
                             </div>
-                            <div className="text-sm sm:text-lg font-black text-blue-600 font-mono shrink-0">
+                            <div className="text-sm sm:text-lg font-black text-blue-600 font-mono shrink-0 whitespace-nowrap">
                               -{generalSummary.hiFreedSupport.toLocaleString()}원
                             </div>
                           </div>
@@ -202,7 +192,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                         </div>
                       </div>
                     </div>
-                    <div className="text-xl sm:text-2xl font-black text-white font-mono tracking-tight shrink-0">
+                    <div className="text-xl sm:text-2xl font-black text-white font-mono tracking-tight shrink-0 whitespace-nowrap">
                       <SpringNumberFlow value={generalSummary.payPrice} suffix="원" />
                     </div>
                   </div>
@@ -229,7 +219,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                     <div className="space-y-2">
                       {generalSummary.totalStep2Cashback > 0 && (
                         <div className="flex items-center justify-between gap-2 bg-white px-3.5 sm:px-4 py-3 rounded-xl border border-rose-200">
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="text-xs sm:text-sm font-black text-slate-900">
                               (-) 캐시백 혜택
                             </div>
@@ -237,7 +227,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                               {step2CashbackDetails.join(' · ')}
                             </div>
                           </div>
-                          <div className="text-sm sm:text-lg font-black text-rose-600 font-mono shrink-0">
+                          <div className="text-sm sm:text-lg font-black text-rose-600 font-mono shrink-0 whitespace-nowrap">
                             -{generalSummary.totalStep2Cashback.toLocaleString()}원
                           </div>
                         </div>
@@ -245,7 +235,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
 
                       {generalSummary.totalStep2ExtraBenefit > 0 && (
                         <div className="flex items-center justify-between gap-2 bg-white px-3.5 sm:px-4 py-3 rounded-xl border border-slate-200">
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="text-xs sm:text-sm font-black text-slate-900">
                               (-) 추가 혜택
                             </div>
@@ -253,7 +243,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                               {step2ExtraDetails.join(' · ')}
                             </div>
                           </div>
-                          <div className="text-sm sm:text-lg font-black text-rose-600 font-mono shrink-0">
+                          <div className="text-sm sm:text-lg font-black text-rose-600 font-mono shrink-0 whitespace-nowrap">
                             -{generalSummary.totalStep2ExtraBenefit.toLocaleString()}원
                           </div>
                         </div>
@@ -298,7 +288,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
               </div>
 
               {/* 5. 하이프리드 선택 시 하단 만기 환급 안내 바 */}
-              {generalHiPreed.totalAccounts > 0 && (
+              {!simState.hideHiPreed && generalHiPreed.totalAccounts > 0 && (
                 <div className="bg-blue-50/80 border border-blue-200 rounded-xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-1.5 text-xs font-bold text-slate-700">
                   <span className="flex items-center gap-1.5 text-blue-950 font-extrabold leading-relaxed">
                     <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
@@ -317,12 +307,12 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
             </div>
           )}
 
-          {/* -------------------- CASE B: 구독구매 단독 제안서 (구독 합계 -> 월 할인/지원 -> 월 체감구독료 -> 일시캐시백 -> 최종 체감가) -------------------- */}
+          {/* -------------------- CASE B: 구독구매 단독 제안서 -------------------- */}
           {simState.quoteMode === 'subscription' && (
             <div className="space-y-3.5 sm:space-y-4">
               {/* 1. 상단 제안서 헤더 */}
               <div className="bg-slate-900 text-white rounded-2xl px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 flex-wrap mb-1">
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/30 text-[11px] font-extrabold">
                       <RefreshCw className="w-3 h-3 text-rose-400" />
@@ -334,11 +324,11 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                       </span>
                     )}
                   </div>
-                  <h2 className="text-base sm:text-xl font-black tracking-tight text-white">
+                  <h2 className="text-base sm:text-xl font-black tracking-tight text-white break-words">
                     {subHeaderTitle}
                   </h2>
                 </div>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-[11px] font-extrabold text-white shrink-0">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-[11px] font-extrabold text-white shrink-0 whitespace-nowrap">
                   <ShieldCheck className="w-3.5 h-3.5 text-rose-400" />
                   품목별 맞춤 케어 · 5년 무상 A/S 보장
                 </span>
@@ -355,7 +345,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                   </span>
                 </div>
                 <div className="space-y-1.5">
-                  {subSummary.displayItems.map((it, idx) => {
+                  {subSummary.displayItems.map((it: any, idx: number) => {
                     const itemPeriod =
                       it.period === 36
                         ? 36
@@ -368,22 +358,22 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                     return (
                       <div
                         key={it.id || idx}
-                        className="flex items-center justify-between gap-2 bg-white px-3.5 py-2.5 rounded-xl border border-slate-200"
+                        className="flex items-start justify-between gap-2 bg-white px-3.5 py-2.5 rounded-xl border border-slate-200 overflow-hidden"
                       >
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="w-5 h-5 rounded-full bg-rose-600 text-white text-[11px] font-black flex items-center justify-center shrink-0">
                               {idx + 1}
                             </span>
-                            <span className="text-xs sm:text-sm font-black text-slate-900">
+                            <span className="text-xs sm:text-sm font-black text-slate-900 break-all">
                               {it.category || `구독 가전 ${idx + 1}`}
                             </span>
                             {it.modelName && (
-                              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-mono">
+                              <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-mono break-all">
                                 {it.modelName}
                               </span>
                             )}
-                            <span className="text-[10.5px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-md">
+                            <span className="text-[10.5px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-md shrink-0">
                               [{itemPeriod}개월 구독]
                             </span>
                           </div>
@@ -391,7 +381,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                             🛡️ {cleanCare} · 5년 무상 A/S 보장
                           </div>
                         </div>
-                        <span className="text-xs sm:text-sm font-black text-slate-900 font-mono shrink-0">
+                        <span className="text-xs sm:text-sm font-black text-slate-900 font-mono shrink-0 whitespace-nowrap">
                           월 {(Number(it.monthlyFee) || 0).toLocaleString()}원
                         </span>
                       </div>
@@ -402,14 +392,14 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                   <span className="text-xs sm:text-sm font-black text-slate-200">
                     총 월 구독료 합계 ({subSummary.periodLabel} 구독)
                   </span>
-                  <span className="text-lg sm:text-2xl font-black text-white font-mono tracking-tight">
+                  <span className="text-lg sm:text-2xl font-black text-white font-mono tracking-tight shrink-0 whitespace-nowrap">
                     월 {subSummary.totalBaseMonthly.toLocaleString()}원
                   </span>
                 </div>
               </div>
 
-              {/* 3. 매월 할인·지원 차감 내역 (제휴카드 월 할인 + 구독프리드 월 지원금) */}
-              {(subSummary.cardDiscount > 0 || subSummary.hiPlusMonthly > 0) && (
+              {/* 3. 매월 할인·지원 차감 내역 */}
+              {(subSummary.cardDiscount > 0 || (!simState.hideSubPreed && subSummary.hiPlusMonthly > 0)) && (
                 <div className="space-y-2">
                   {subSummary.cardDiscount > 0 && currentCard && currentCardTier && (
                     <div className="bg-blue-50/80 border border-blue-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-2">
@@ -428,13 +418,13 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                           </div>
                         </div>
                       </div>
-                      <div className="text-sm sm:text-xl font-black text-blue-600 font-mono shrink-0">
+                      <div className="text-sm sm:text-xl font-black text-blue-600 font-mono shrink-0 whitespace-nowrap">
                         월 -{subSummary.cardDiscount.toLocaleString()}원
                       </div>
                     </div>
                   )}
 
-                  {subSummary.hiPlusMonthly > 0 && (
+                  {!simState.hideSubPreed && subSummary.hiPlusMonthly > 0 && (
                     <div className="bg-blue-50/80 border border-blue-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
@@ -449,7 +439,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                           </div>
                         </div>
                       </div>
-                      <div className="text-sm sm:text-xl font-black text-indigo-600 font-mono shrink-0">
+                      <div className="text-sm sm:text-xl font-black text-indigo-600 font-mono shrink-0 whitespace-nowrap">
                         월 -{subSummary.hiPlusMonthly.toLocaleString()}원
                       </div>
                     </div>
@@ -459,7 +449,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
 
               {/* 4. 메인 월 체감 구독료 강조 박스 */}
               <div className="bg-rose-50/75 border-2 border-rose-500 rounded-2xl p-4 sm:p-5 text-center space-y-1.5 shadow-2xs">
-                {(subSummary.cardDiscount > 0 || subSummary.hiPlusMonthly > 0) && (
+                {(subSummary.cardDiscount > 0 || (!simState.hideSubPreed && subSummary.hiPlusMonthly > 0)) && (
                   <div className="inline-flex items-center gap-1.5 px-3.5 py-0.5 rounded-full bg-white border border-rose-200 text-[11px] font-extrabold text-slate-700">
                     <span>{subFormulaText}</span>
                   </div>
@@ -506,7 +496,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                         </div>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="text-right shrink-0 whitespace-nowrap">
                       <div className="text-sm sm:text-xl font-black text-emerald-600 font-mono">
                         -{subSummary.totalSubCashback.toLocaleString()}원
                       </div>
@@ -531,8 +521,8 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                         </span>
                       </div>
                     </div>
-                    <div className="text-right shrink-0 pl-2">
-                      <span className="text-xl sm:text-3xl font-black text-amber-400 font-mono tracking-tight whitespace-nowrap">
+                    <div className="text-right shrink-0 pl-2 whitespace-nowrap">
+                      <span className="text-xl sm:text-3xl font-black text-amber-400 font-mono tracking-tight">
                         <SpringNumberFlow value={subSummary.finalTotalFee} suffix="원" />
                       </span>
                     </div>
@@ -555,7 +545,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
               )}
 
               {/* 6. 구독프리드 선택 시 하단 만기 환급 안내 바 */}
-              {hiPlusSummary.totalAccounts > 0 && (
+              {!simState.hideSubPreed && hiPlusSummary.totalAccounts > 0 && (
                 <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-1.5 text-xs font-bold text-slate-700">
                   <span className="flex items-center gap-1.5 text-indigo-950 font-extrabold leading-relaxed">
                     <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
@@ -574,12 +564,12 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
             </div>
           )}
 
-          {/* -------------------- CASE C: 일반+구독 혼합 제안서 (통합앱 혼합 제안서 배열과 100% 동일 순서) -------------------- */}
+          {/* -------------------- CASE C: 일반+구독 혼합 제안서 -------------------- */}
           {simState.quoteMode === 'hybrid' && (
             <div className="space-y-3.5 sm:space-y-4">
               {/* 1. 혼합 상단 헤더 */}
               <div className="bg-slate-900 text-white rounded-2xl px-4 sm:px-5 py-3.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 flex-wrap mb-1">
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 text-[11px] font-extrabold">
                       <Layers className="w-3 h-3 text-indigo-400" />
@@ -595,61 +585,61 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                     일반구매 · 구독구매 통합 맞춤 제안서
                   </h2>
                 </div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-[11px] font-extrabold text-blue-300">
+                <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                  <span className="px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-[11px] font-extrabold text-blue-300 whitespace-nowrap">
                     일반 카드:{' '}
                     {simState.generalCardType === '미정' ||
                     simState.generalCardType === '일반카드'
                       ? '미적용'
                       : simState.generalCardType}
                   </span>
-                  <span className="px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-[11px] font-extrabold text-rose-300">
+                  <span className="px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-[11px] font-extrabold text-rose-300 whitespace-nowrap">
                     구독: {subSummary.periodLabel}
                   </span>
                 </div>
               </div>
 
-              {/* 2. 파트 A(일반구매) & 파트 B(구독구매) 대칭 배치 (모바일 1열 · 폴드/태블릿/PC 2열) */}
+              {/* 2. 파트 A(일반구매) & 파트 B(구독구매) 대칭 배치 (min-w-0 overflow-hidden 적용으로 폴드8 울트라 펼침 화면 긴 모델명 텍스트 삐져나감 원천 차단) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 items-start">
-                {/* [파트 A. 일반구매: 가전 합계 -> 즉시할인/프리드 -> 결제가 -> 캐시백/추가혜택 -> 최종 혜택가] */}
-                <div className="bg-slate-50 rounded-2xl border border-slate-200 p-3.5 sm:p-4 space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                    <span className="text-xs sm:text-sm font-black text-blue-700 flex items-center gap-1.5">
-                      <ShoppingBag className="w-4 h-4" />
-                      파트 A. 일반구매 (일시불)
+                {/* [파트 A. 일반구매] */}
+                <div className="bg-slate-50 rounded-2xl border border-slate-200 p-3.5 sm:p-4 space-y-3 min-w-0 overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2 gap-2">
+                    <span className="text-xs sm:text-sm font-black text-blue-700 flex items-center gap-1.5 min-w-0">
+                      <ShoppingBag className="w-4 h-4 shrink-0" />
+                      <span className="truncate">파트 A. 일반구매 (일시불)</span>
                     </span>
-                    <span className="text-xs font-bold text-slate-500">
+                    <span className="text-xs font-bold text-slate-500 shrink-0 whitespace-nowrap">
                       {generalSummary.displayItems.length}개 품목
                     </span>
                   </div>
 
                   {/* 가전 품목 및 총 합계 금액 */}
-                  <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-1.5">
-                    {generalSummary.displayItems.map((it, idx) => {
+                  <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-1.5 overflow-hidden">
+                    {generalSummary.displayItems.map((it: any, idx: number) => {
                       const amt =
                         (Number(it.unitPrice) || 0) *
                         Math.max(1, Number(it.quantity) || 1);
                       return (
                         <div
                           key={it.id || idx}
-                          className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700"
+                          className="flex items-start justify-between gap-2 text-xs font-bold text-slate-700"
                         >
-                          <span className="min-w-0">
+                          <span className="min-w-0 flex-1 break-all leading-snug">
                             {idx + 1}. {it.category || `일반가전 ${idx + 1}`}
                             {it.modelName ? ` (${it.modelName})` : ''}
                             {it.quantity > 1 ? ` ×${it.quantity}` : ''}
                           </span>
-                          <span className="font-black text-slate-900 font-mono shrink-0">
+                          <span className="font-black text-slate-900 font-mono shrink-0 whitespace-nowrap">
                             {amt.toLocaleString()}원
                           </span>
                         </div>
                       );
                     })}
-                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-                      <span className="text-xs font-black text-slate-700">
+                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
+                      <span className="text-xs font-black text-slate-700 shrink-0">
                         총 합계 금액
                       </span>
-                      <span className="text-base font-black text-slate-900 font-mono">
+                      <span className="text-base font-black text-slate-900 font-mono shrink-0 whitespace-nowrap">
                         {generalSummary.sum.toLocaleString()}원
                       </span>
                     </div>
@@ -659,32 +649,32 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                   {generalSummary.totalDiscountAndBenefit > 0 && (
                     <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2">
                       {(generalSummary.totalStep1InstantDiscount > 0 ||
-                        generalSummary.hiFreedSupport > 0) && (
+                        (!simState.hideHiPreed && generalSummary.hiFreedSupport > 0)) && (
                         <div className="text-xs font-black text-blue-700">
                           [1단계: 고객 실 결제부담금 산출]
                         </div>
                       )}
                       {generalSummary.totalStep1InstantDiscount > 0 && (
                         <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700">
-                          <span>(-) 즉시할인 혜택</span>
-                          <span className="font-black text-blue-600 font-mono shrink-0">
+                          <span className="min-w-0">(-) 즉시할인 혜택</span>
+                          <span className="font-black text-blue-600 font-mono shrink-0 whitespace-nowrap">
                             -{generalSummary.totalStep1InstantDiscount.toLocaleString()}원
                           </span>
                         </div>
                       )}
-                      {generalSummary.hiFreedSupport > 0 && (
+                      {!simState.hideHiPreed && generalSummary.hiFreedSupport > 0 && (
                         <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700">
-                          <span>(-) 하이프리드 지원금</span>
-                          <span className="font-black text-blue-600 font-mono shrink-0">
+                          <span className="min-w-0">(-) 하이프리드 지원금</span>
+                          <span className="font-black text-blue-600 font-mono shrink-0 whitespace-nowrap">
                             -{generalSummary.hiFreedSupport.toLocaleString()}원
                           </span>
                         </div>
                       )}
                       <div className="bg-blue-600 text-white rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2">
-                        <span className="text-xs font-black">
+                        <span className="text-xs font-black whitespace-nowrap">
                           💳 고객 실 결제부담금
                         </span>
-                        <span className="text-base font-black font-mono shrink-0">
+                        <span className="text-base font-black font-mono shrink-0 whitespace-nowrap">
                           <SpringNumberFlow value={generalSummary.payPrice} suffix="원" />
                         </span>
                       </div>
@@ -701,16 +691,16 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                     )}
                     {generalSummary.totalStep2Cashback > 0 && (
                       <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700">
-                        <span>(-) 캐시백 혜택</span>
-                        <span className="font-black text-rose-600 font-mono shrink-0">
+                        <span className="min-w-0">(-) 캐시백 혜택</span>
+                        <span className="font-black text-rose-600 font-mono shrink-0 whitespace-nowrap">
                           -{generalSummary.totalStep2Cashback.toLocaleString()}원
                         </span>
                       </div>
                     )}
                     {generalSummary.totalStep2ExtraBenefit > 0 && (
                       <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700">
-                        <span>(-) 추가 혜택</span>
-                        <span className="font-black text-rose-600 font-mono shrink-0">
+                        <span className="min-w-0">(-) 추가 혜택</span>
+                        <span className="font-black text-rose-600 font-mono shrink-0 whitespace-nowrap">
                           -{generalSummary.totalStep2ExtraBenefit.toLocaleString()}원
                         </span>
                       </div>
@@ -726,21 +716,21 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                   </div>
                 </div>
 
-                {/* [파트 B. 구독구매: 총 월 구독료 합계 -> 월 할인/지원 -> 월 체감 구독료 -> 일시캐시백 -> 최종 체감가] */}
-                <div className="bg-slate-50 rounded-2xl border border-slate-200 p-3.5 sm:p-4 space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                    <span className="text-xs sm:text-sm font-black text-rose-600 flex items-center gap-1.5">
-                      <RefreshCw className="w-4 h-4" />
-                      파트 B. 구독구매 ({subSummary.periodLabel})
+                {/* [파트 B. 구독구매] */}
+                <div className="bg-slate-50 rounded-2xl border border-slate-200 p-3.5 sm:p-4 space-y-3 min-w-0 overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2 gap-2">
+                    <span className="text-xs sm:text-sm font-black text-rose-600 flex items-center gap-1.5 min-w-0">
+                      <RefreshCw className="w-4 h-4 shrink-0" />
+                      <span className="truncate">파트 B. 구독구매 ({subSummary.periodLabel})</span>
                     </span>
-                    <span className="text-xs font-bold text-slate-500">
+                    <span className="text-xs font-bold text-slate-500 shrink-0 whitespace-nowrap">
                       {subSummary.displayItems.length}개 품목
                     </span>
                   </div>
 
                   {/* 구독 품목 및 총 월 구독료 합계 */}
-                  <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2">
-                    {subSummary.displayItems.map((it, idx) => {
+                  <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2 overflow-hidden">
+                    {subSummary.displayItems.map((it: any, idx: number) => {
                       const itemPeriod =
                         it.period === 36
                           ? 36
@@ -753,40 +743,40 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                       return (
                         <div
                           key={it.id || idx}
-                          className="flex items-center justify-between text-xs gap-2"
+                          className="flex items-start justify-between text-xs gap-2"
                         >
-                          <div className="min-w-0">
-                            <div className="font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
-                              <span>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-slate-800 flex items-center gap-1.5 flex-wrap leading-snug">
+                              <span className="break-all">
                                 {idx + 1}. {it.category || `구독가전 ${idx + 1}`}
                                 {it.modelName ? ` (${it.modelName})` : ''}
                               </span>
-                              <span className="text-[10px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-md">
+                              <span className="text-[10px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded-md shrink-0">
                                 [{itemPeriod}개월 구독]
                               </span>
                             </div>
-                            <div className="text-[11px] font-semibold text-slate-500">
+                            <div className="text-[11px] font-semibold text-slate-500 mt-0.5">
                               🛡️ {cleanCare} · 5년 무상 A/S 보장
                             </div>
                           </div>
-                          <span className="font-black text-slate-900 font-mono shrink-0">
+                          <span className="font-black text-slate-900 font-mono shrink-0 whitespace-nowrap">
                             월 {(Number(it.monthlyFee) || 0).toLocaleString()}원
                           </span>
                         </div>
                       );
                     })}
-                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-                      <span className="text-xs font-black text-slate-700">
+                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
+                      <span className="text-xs font-black text-slate-700 shrink-0">
                         총 월 구독료 합계
                       </span>
-                      <span className="text-base font-black text-slate-900 font-mono">
+                      <span className="text-base font-black text-slate-900 font-mono shrink-0 whitespace-nowrap">
                         월 {subSummary.totalBaseMonthly.toLocaleString()}원
                       </span>
                     </div>
                   </div>
 
                   {/* 월 할인 및 지원금 차감 */}
-                  {(subSummary.cardDiscount > 0 || subSummary.hiPlusMonthly > 0) && (
+                  {(subSummary.cardDiscount > 0 || (!simState.hideSubPreed && subSummary.hiPlusMonthly > 0)) && (
                     <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2">
                       <div className="text-xs font-black text-slate-700">
                         [1단계: 월 할인 및 지원금 차감]
@@ -795,19 +785,19 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                         currentCard &&
                         currentCardTier && (
                           <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700">
-                            <span>
+                            <span className="min-w-0 break-keep">
                               (-) 제휴카드 월 {subCardBenefitLabel} ({currentCard.shortName} ·{' '}
                               {currentCardTier.minSpendShort})
                             </span>
-                            <span className="font-black text-blue-600 font-mono shrink-0">
+                            <span className="font-black text-blue-600 font-mono shrink-0 whitespace-nowrap">
                               월 -{subSummary.cardDiscount.toLocaleString()}원
                             </span>
                           </div>
                         )}
-                      {subSummary.hiPlusMonthly > 0 && (
+                      {!simState.hideSubPreed && subSummary.hiPlusMonthly > 0 && (
                         <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-700">
-                          <span>(-) 구독프리드 월 지원금</span>
-                          <span className="font-black text-indigo-600 font-mono shrink-0">
+                          <span className="min-w-0">(-) 구독프리드 월 지원금</span>
+                          <span className="font-black text-indigo-600 font-mono shrink-0 whitespace-nowrap">
                             월 -{subSummary.hiPlusMonthly.toLocaleString()}원
                           </span>
                         </div>
@@ -817,7 +807,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
 
                   {/* 월 체감 구독료 강조 박스 */}
                   <div className="bg-rose-50/80 border-2 border-rose-500 rounded-xl p-3.5 text-center space-y-1">
-                    {(subSummary.cardDiscount > 0 || subSummary.hiPlusMonthly > 0) && (
+                    {(subSummary.cardDiscount > 0 || (!simState.hideSubPreed && subSummary.hiPlusMonthly > 0)) && (
                       <div className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-white border border-rose-200 text-[10px] font-extrabold text-slate-600">
                         {subFormulaText}
                       </div>
@@ -838,26 +828,26 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                       <div className="text-[11px] font-black text-emerald-900">
                         [2단계: 일시 입금 캐시백 차감 · 1회 입금]
                       </div>
-                      <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                      <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-600">
                         <span>{subSummary.periodLabel} 월 납부 합계</span>
-                        <span className="font-extrabold text-slate-800 font-mono">
+                        <span className="font-extrabold text-slate-800 font-mono shrink-0 whitespace-nowrap">
                           {subSummary.totalTermBillingBeforeCashback.toLocaleString()}원
                         </span>
                       </div>
                       {subSummary.subTierCashback > 0 && (
-                        <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
-                          <span>
+                        <div className="flex items-center justify-between gap-2 text-xs font-bold text-emerald-800">
+                          <span className="min-w-0">
                             (-) {currentCard?.shortName || '제휴카드'} 금액대별 캐시백
                           </span>
-                          <span className="font-black text-emerald-600 font-mono">
+                          <span className="font-black text-emerald-600 font-mono shrink-0 whitespace-nowrap">
                             -{subSummary.subTierCashback.toLocaleString()}원
                           </span>
                         </div>
                       )}
                       {subSummary.subExtraCashback > 0 && (
-                        <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
-                          <span>(-) 구독 추가 캐시백 (1회 입금)</span>
-                          <span className="font-black text-emerald-600 font-mono">
+                        <div className="flex items-center justify-between gap-2 text-xs font-bold text-emerald-800">
+                          <span className="min-w-0">(-) 구독 추가 캐시백 (1회 입금)</span>
+                          <span className="font-black text-emerald-600 font-mono shrink-0 whitespace-nowrap">
                             -{subSummary.subExtraCashback.toLocaleString()}원
                           </span>
                         </div>
@@ -865,7 +855,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                     </div>
                   )}
 
-                  {/* 구독 최종 기간 체감가 리본 바 (원금 한 글자 줄바꿈 원천 방지) */}
+                  {/* 구독 최종 기간 체감가 리본 바 */}
                   <div className="bg-slate-900 text-white rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs">
                     <span className="font-extrabold text-amber-300 whitespace-nowrap shrink-0">
                       🎯 최종 {subSummary.periodLabel} 체감가
@@ -884,7 +874,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
 
               {/* 3. 혼합 제안서 최하단 통합 합산 바 */}
               <div className="bg-slate-900 text-white rounded-2xl px-4 sm:px-5 py-4 flex flex-wrap items-center justify-between gap-3 shadow-md">
-                <div className="space-y-1 min-w-0">
+                <div className="space-y-1 min-w-0 flex-1">
                   <div className="text-xs sm:text-sm font-black text-slate-100 leading-relaxed break-keep">
                     일반구매 최종 혜택가 ({generalSummary.rawNet.toLocaleString()}원) +
                     구독구매 {subSummary.periodLabel} 최종 체감가 (
@@ -900,7 +890,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                       ` · 통합 총 할인/캐시백/지원 혜택 -${hybridTotalDiscountAndSupport.toLocaleString()}원`}
                   </div>
                 </div>
-                <div className="text-right ml-auto">
+                <div className="text-right ml-auto shrink-0">
                   <div className="text-xs font-extrabold text-amber-300 mb-0.5 whitespace-nowrap">
                     🎯 일반구매 + 구독구매 최종 혜택가 합계
                   </div>
@@ -911,8 +901,8 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
               </div>
 
               {/* 4. 혼합 프리드 결합 만기 환급 안내 바 */}
-              {(generalHiPreed.totalAccounts > 0 ||
-                hiPlusSummary.totalAccounts > 0) && (
+              {((!simState.hideHiPreed && generalHiPreed.totalAccounts > 0) ||
+                (!simState.hideSubPreed && hiPlusSummary.totalAccounts > 0)) && (
                 <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-1.5 text-xs font-bold text-slate-700">
                   <span className="flex items-center gap-1.5 text-indigo-950 font-extrabold">
                     <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
@@ -921,19 +911,21 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                     </span>
                   </span>
                   <span className="text-[11.5px] font-extrabold text-indigo-800 break-keep">
-                    {generalHiPreed.totalAccounts > 0 &&
+                    {!simState.hideHiPreed &&
+                      generalHiPreed.totalAccounts > 0 &&
                       `일반 하이프리드 만기(150회) ${generalHiPreed.totalMaturityRefund.toLocaleString()}원 환급`}
-                    {generalHiPreed.totalAccounts > 0 &&
+                    {!simState.hideHiPreed &&
+                      generalHiPreed.totalAccounts > 0 &&
+                      !simState.hideSubPreed &&
                       hiPlusSummary.totalAccounts > 0 &&
                       ' · '}
-                    {hiPlusSummary.totalAccounts > 0 &&
+                    {!simState.hideSubPreed &&
+                      hiPlusSummary.totalAccounts > 0 &&
                       `구독프리드 (납입기간 90회 · 30회는 거치만 / 120회 만기) ${hiPlusSummary.totalMaturityRefund.toLocaleString()}원 환급`}
                   </span>
                 </div>
               )}
             </div>
-          )}
-            </>
           )}
         </section>
     </>
