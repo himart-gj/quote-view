@@ -218,8 +218,8 @@ export function installLifecycleResumeAndUpdateGuard(options: {
   };
 
   const handleVitePreloadError = (e: Event) => {
-    const customEvt = e as CustomEvent;
-    if (tryRecoverFromStaleChunkError(customEvt?.payload || 'Unable to preload CSS')) {
+    const preloadEvt = e as Event & { payload?: unknown };
+    if (tryRecoverFromStaleChunkError(preloadEvt?.payload || 'Unable to preload CSS')) {
       e.preventDefault();
     }
   };
