@@ -1,0 +1,222 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- 배경 그라디언트: 프리미엄 딥 흑청 & 미드나이트 네이비 블루 -->
+    <radialGradient id="bgGrad" cx="50%" cy="45%" r="75%">
+      <stop offset="0%" stop-color="#14264e"/>
+      <stop offset="55%" stop-color="#0b162f"/>
+      <stop offset="100%" stop-color="#050a17"/>
+    </radialGradient>
+
+    <!-- 프리미엄 3D 메탈릭 골드 그라디언트 -->
+    <linearGradient id="goldLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF8D6"/>
+      <stop offset="25%" stop-color="#FCE183"/>
+      <stop offset="50%" stop-color="#E5B943"/>
+      <stop offset="75%" stop-color="#BF8D24"/>
+      <stop offset="100%" stop-color="#885E0E"/>
+    </linearGradient>
+
+    <linearGradient id="goldDark" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#885E0E"/>
+      <stop offset="30%" stop-color="#BA8820"/>
+      <stop offset="60%" stop-color="#F2CB59"/>
+      <stop offset="85%" stop-color="#FFF1B0"/>
+      <stop offset="100%" stop-color="#F5CB52"/>
+    </linearGradient>
+
+    <linearGradient id="goldHorizontal" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#9C6B13"/>
+      <stop offset="20%" stop-color="#F9D768"/>
+      <stop offset="45%" stop-color="#FFF6CA"/>
+      <stop offset="70%" stop-color="#DFB039"/>
+      <stop offset="100%" stop-color="#7A4E08"/>
+    </linearGradient>
+
+    <linearGradient id="goldBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#BA8820" stop-opacity="0.9"/>
+      <stop offset="35%" stop-color="#FFF4C2" stop-opacity="0.95"/>
+      <stop offset="70%" stop-color="#D4A735" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#885E0E" stop-opacity="0.8"/>
+    </linearGradient>
+
+    <!-- 입체 엠보싱 섀도우 필터 -->
+    <filter id="goldShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#020409" flood-opacity="0.85"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.9"/>
+    </filter>
+
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feColorMatrix type="matrix" values="1 0 0 0 0.95  0 1 0 0 0.8  0 0 1 0 0.4  0 0 0 0.35 0" in="blur" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- 단일 월계수 잎 컴포넌트 -->
+    <g id="leafPair1">
+      <path d="M0,0 C-10,-18 -18,-38 -6,-54 C2,-42 8,-24 0,0 Z" fill="url(#goldLight)"/>
+      <path d="M-2,-3 C-8,-17 -14,-34 -5,-48 C1,-38 5,-23 -2,-3 Z" fill="url(#goldDark)" opacity="0.6"/>
+    </g>
+    <g id="leafPair2">
+      <path d="M0,0 C12,-16 22,-36 12,-52 C2,-40 -4,-22 0,0 Z" fill="url(#goldLight)"/>
+      <path d="M2,-3 C10,-16 17,-32 10,-46 C2,-36 -2,-21 2,-3 Z" fill="url(#goldDark)" opacity="0.6"/>
+    </g>
+  </defs>
+
+  <!-- 메인 라운드 사각형 배경 -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+
+  <!-- 외부 세련된 골드 프레임 테두리 -->
+  <rect x="20" y="20" width="472" height="472" rx="96" fill="none" stroke="url(#goldBorder)" stroke-width="4.5" opacity="0.85"/>
+  <rect x="26" y="26" width="460" height="460" rx="90" fill="none" stroke="#040916" stroke-width="2" opacity="0.6"/>
+
+  <!-- 골드 엠블럼 전체 컨테이너 (그림자 및 글로우 적용) -->
+  <g filter="url(#goldShadow)">
+
+    <!-- 1. 좌측 월계수 가지 (Left Laurel Wreath) -->
+    <g transform="translate(256, 380)">
+      <!-- 좌측 줄기 아치 -->
+      <path d="M-15,-10 C-95,-20 -155,-90 -160,-175 C-165,-245 -115,-305 -65,-335" 
+            fill="none" stroke="url(#goldLight)" stroke-width="7" stroke-linecap="round"/>
+      <path d="M-15,-10 C-95,-20 -155,-90 -160,-175 C-165,-245 -115,-305 -65,-335" 
+            fill="none" stroke="#684506" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+
+      <!-- 좌측 잎파리들 (아래부터 위로) -->
+      <!-- 잎 1 (최하단) -->
+      <path d="M-30,-22 C-55,-18 -75,-30 -80,-45 C-65,-48 -45,-40 -30,-22 Z" fill="url(#goldLight)"/>
+      <path d="M-22,-35 C-38,-45 -55,-65 -45,-80 C-35,-70 -25,-55 -22,-35 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 2 -->
+      <path d="M-65,-60 C-95,-62 -118,-80 -120,-98 C-102,-98 -82,-85 -65,-60 Z" fill="url(#goldLight)"/>
+      <path d="M-52,-78 C-72,-95 -90,-120 -78,-135 C-65,-122 -52,-102 -52,-78 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 3 (중하단) -->
+      <path d="M-105,-118 C-138,-125 -162,-148 -160,-168 C-142,-164 -122,-148 -105,-118 Z" fill="url(#goldLight)"/>
+      <path d="M-88,-140 C-110,-160 -130,-190 -115,-205 C-100,-190 -85,-168 -88,-140 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 4 (중앙) -->
+      <path d="M-135,-185 C-170,-198 -192,-228 -185,-248 C-168,-240 -148,-220 -135,-185 Z" fill="url(#goldLight)"/>
+      <path d="M-115,-210 C-138,-235 -152,-268 -135,-280 C-120,-262 -108,-238 -115,-210 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 5 (중상단) -->
+      <path d="M-140,-260 C-170,-280 -185,-315 -172,-332 C-155,-322 -140,-298 -140,-260 Z" fill="url(#goldLight)"/>
+      <path d="M-118,-282 C-138,-310 -145,-345 -128,-355 C-115,-338 -105,-310 -118,-282 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 6 (상단) -->
+      <path d="M-115,-330 C-138,-358 -142,-392 -125,-405 C-112,-390 -105,-365 -115,-330 Z" fill="url(#goldLight)"/>
+      <path d="M-90,-345 C-105,-375 -105,-410 -88,-418 C-78,-400 -75,-372 -90,-345 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 7 (최상단 크라운) -->
+      <path d="M-65,-380 C-75,-415 -70,-448 -52,-455 C-45,-435 -48,-405 -65,-380 Z" fill="url(#goldLight)"/>
+    </g>
+
+    <!-- 2. 우측 월계수 가지 (Right Laurel Wreath - 대칭) -->
+    <g transform="translate(256, 380)">
+      <!-- 우측 줄기 아치 -->
+      <path d="M15,-10 C95,-20 155,-90 160,-175 C165,-245 115,-305 65,-335" 
+            fill="none" stroke="url(#goldLight)" stroke-width="7" stroke-linecap="round"/>
+      <path d="M15,-10 C95,-20 155,-90 160,-175 C165,-245 115,-305 65,-335" 
+            fill="none" stroke="#684506" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+
+      <!-- 우측 잎파리들 -->
+      <!-- 잎 1 (최하단) -->
+      <path d="M30,-22 C55,-18 75,-30 80,-45 C65,-48 45,-40 30,-22 Z" fill="url(#goldLight)"/>
+      <path d="M22,-35 C38,-45 55,-65 45,-80 C35,-70 25,-55 22,-35 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 2 -->
+      <path d="M65,-60 C95,-62 118,-80 120,-98 C102,-98 82,-85 65,-60 Z" fill="url(#goldLight)"/>
+      <path d="M52,-78 C72,-95 90,-120 78,-135 C65,-122 52,-102 52,-78 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 3 (중하단) -->
+      <path d="M105,-118 C138,-125 162,-148 160,-168 C142,-164 122,-148 105,-118 Z" fill="url(#goldLight)"/>
+      <path d="M88,-140 C110,-160 130,-190 115,-205 C100,-190 85,-168 88,-140 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 4 (중앙) -->
+      <path d="M135,-185 C170,-198 192,-228 185,-248 C168,-240 148,-220 135,-185 Z" fill="url(#goldLight)"/>
+      <path d="M115,-210 C138,-235 152,-268 135,-280 C120,-262 108,-238 115,-210 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 5 (중상단) -->
+      <path d="M140,-260 C170,-280 185,-315 172,-332 C155,-322 140,-298 140,-260 Z" fill="url(#goldLight)"/>
+      <path d="M118,-282 C138,-310 145,-345 128,-355 C115,-338 105,-310 118,-282 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 6 (상단) -->
+      <path d="M115,-330 C138,-358 142,-392 125,-405 C112,-390 105,-365 115,-330 Z" fill="url(#goldLight)"/>
+      <path d="M90,-345 C105,-375 105,-410 88,-418 C78,-400 75,-372 90,-345 Z" fill="url(#goldDark)"/>
+
+      <!-- 잎 7 (최상단 크라운) -->
+      <path d="M65,-380 C75,-415 70,-448 52,-455 C45,-435 48,-405 65,-380 Z" fill="url(#goldLight)"/>
+    </g>
+
+    <!-- 3. 하단 리본 매듭 (Bottom Ribbon & Crossed Stems) -->
+    <g transform="translate(256, 375)">
+      <!-- 교차 줄기 -->
+      <path d="M-35,15 Q0,0 35,15 Q0,-10 -35,15 Z" fill="url(#goldLight)"/>
+      <!-- 리본 중앙 매듭 -->
+      <circle cx="0" cy="5" r="8" fill="url(#goldLight)"/>
+      <circle cx="0" cy="5" r="5" fill="url(#goldDark)"/>
+      <!-- 리본 좌/우 꼬리 -->
+      <path d="M-5,10 C-15,22 -22,35 -12,42 C-8,30 -2,20 -2,12 Z" fill="url(#goldLight)"/>
+      <path d="M5,10 C15,22 22,35 12,42 C8,30 2,20 2,12 Z" fill="url(#goldLight)"/>
+    </g>
+
+    <!-- 4. 중앙 골드 엠블럼: 정교한 EA 모노그램 (Interwoven Luxury Monogram) -->
+    <g id="monogram" transform="translate(256, 240)">
+      
+      <!-- [Letter E - 좌측 클래식 세리프 & 곡선 결합체] -->
+      <!-- E 상단 수평바 및 세리프 -->
+      <path d="M-72,-85 L-12,-85 C-6,-85 2,-82 2,-72 C2,-65 -4,-62 -12,-62 L-48,-62 L-48,-18 L-22,-18 C-16,-18 -10,-15 -10,-7 C-10,0 -16,4 -22,4 L-48,4 L-48,48 L-10,48 C-2,48 5,52 5,60 C5,68 -2,72 -10,72 L-72,72 C-80,72 -86,66 -86,58 L-86,-71 C-86,-79 -80,-85 -72,-85 Z"
+            fill="url(#goldLight)"/>
+
+      <!-- E의 웅장한 볼륨감 있는 좌측 세로 기둥 베벨 효과 -->
+      <path d="M-86,-71 L-72,-85 L-72,72 L-86,58 Z" fill="url(#goldDark)" opacity="0.75"/>
+      <path d="M-72,-85 L-12,-85 L-12,-72 L-72,-72 Z" fill="url(#goldHorizontal)"/>
+
+      <!-- E의 중앙 곡선형 스우시 (Letter A를 관통하여 우측으로 뻗어나가는 곡선 리본) -->
+      <path d="M-48,-6 C-25,-8 10,-35 42,-5 C68,20 85,2 92,-10 C93,-12 96,-11 95,-8 C86,12 62,35 32,10 C2,-12 -28,8 -48,8 Z"
+            fill="url(#goldLight)"/>
+      <path d="M-48,0 C-25,-4 10,-28 42,-2 C68,22 82,6 90,-4 C88,6 65,28 35,8 C5,-10 -25,4 -48,4 Z"
+            fill="#FFF8D6" opacity="0.6"/>
+
+      <!-- [Letter A - 우측 웅장한 세리프 대문자] -->
+      <!-- A 좌측 대각선 기둥 -->
+      <path d="M-6,-68 L16,-68 L-38,62 L-58,62 Z" fill="url(#goldDark)" opacity="0.85"/>
+      
+      <!-- A 우측 대각선 메인 굵은 기둥 (엠블럼의 시각적 중심) -->
+      <path d="M6,-72 C12,-82 22,-85 32,-85 C40,-85 48,-80 52,-70 L98,52 C104,65 110,68 120,68 L122,68 L122,74 L78,74 L78,68 C88,68 92,62 86,48 L76,22 L18,22 L10,45 C6,58 12,68 22,68 L24,74 L-20,74 L-20,68 C-10,68 -5,60 0,48 Z"
+            fill="url(#goldLight)"/>
+
+      <!-- A의 우측 메인 기둥 하이라이트 베벨 -->
+      <path d="M26,-80 L34,-85 L98,52 L90,56 Z" fill="#FFFBE8" opacity="0.65"/>
+      <path d="M34,-85 L52,-70 L76,22 L68,22 Z" fill="url(#goldDark)" opacity="0.7"/>
+
+      <!-- A 내부 삼각형 공간 (삼각 컷아웃) -->
+      <path d="M42,-38 L68,10 L28,10 Z" fill="#0c1834"/>
+      <path d="M42,-38 L68,10 L28,10 Z" fill="none" stroke="url(#goldDark)" stroke-width="2.5"/>
+
+      <!-- A 상단 세리프 디테일 캡 -->
+      <path d="M12,-72 L50,-72 L42,-84 L20,-84 Z" fill="url(#goldLight)"/>
+
+      <!-- A 수평 크로스바 (골드 바) -->
+      <path d="M12,14 L80,14 L76,24 L16,24 Z" fill="url(#goldHorizontal)"/>
+    </g>
+
+    <!-- 5. 엠블럼 하단 텍스트 배지 (국지 CRM & 가전 견적) -->
+    <g transform="translate(256, 436)">
+      <rect x="-90" y="-16" width="180" height="32" rx="16" fill="#071126" stroke="url(#goldBorder)" stroke-width="1.8"/>
+      <text x="0" y="5" font-family="'Pretendard', -apple-system, sans-serif" font-weight="900" font-size="13" fill="url(#goldLight)" text-anchor="middle" letter-spacing="3">
+        KUKJI CRM
+      </text>
+    </g>
+
+  </g>
+
+  <!-- 미세 황금빛 광채 스파클 -->
+  <g filter="url(#softGlow)">
+    <circle cx="256" cy="155" r="2.5" fill="#FFFEE8"/>
+    <circle cx="160" cy="230" r="2" fill="#FFEAA7"/>
+    <circle cx="350" cy="225" r="2" fill="#FFEAA7"/>
+    <circle cx="256" cy="436" r="1.5" fill="#FFFFFF"/>
+  </g>
+</svg>

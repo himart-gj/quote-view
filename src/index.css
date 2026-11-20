@@ -1,0 +1,396 @@
+@import "tailwindcss";
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+:root,
+html[data-theme="light"] {
+  --bg-app: #f2f4f6;
+  --bg-surface: #ffffff;
+  --bg-surface-alt: #f8fafc;
+  --border-subtle: #e5e8eb;
+  --border-strong: #d1d6db;
+  --text-main: #191f28;
+  --text-secondary: #4e5968;
+  --text-muted: #8b95a1;
+  --accent-brand: #e60012;
+  --accent-brand-soft: #fff1f2;
+  --accent-saving: #1b64da;
+  --accent-saving-soft: #eff6ff;
+  --accent-bronze: #191f28;
+  --accent-bronze-soft: #f2f4f6;
+}
+
+html[data-theme="dark"] {
+  --bg-app: #0b1120;
+  --bg-surface: #131c2e;
+  --bg-surface-alt: #1e293b;
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --text-main: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --accent-brand: #ff3b47;
+  --accent-brand-soft: rgba(255, 59, 71, 0.15);
+  --accent-saving: #60a5fa;
+  --accent-saving-soft: rgba(96, 165, 250, 0.14);
+  --accent-bronze: #f8fafc;
+  --accent-bronze-soft: rgba(255, 255, 255, 0.08);
+}
+
+@layer base {
+  html,
+  body {
+    min-height: 100dvh;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: "Pretendard Variable", Pretendard, "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    color: var(--text-main);
+    background-color: var(--bg-app);
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.015em;
+    scroll-behavior: auto;
+    transition: background-color 0.18s ease, color 0.18s ease;
+  }
+
+  .font-mono {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Enterprise Flagship utility classes */
+.ledger-hairline {
+  border-color: var(--border-subtle);
+}
+
+.ledger-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: nowrap !important;
+  gap: 0.75rem;
+}
+
+.ledger-row-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.ledger-row-value {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Light surface harmonization (excluding print sheets) */
+html[data-theme="light"] .bg-slate-50:not(.print-sheet *):not(.pop-card-print *),
+html[data-theme="light"] .bg-slate-100:not(.print-sheet *):not(.pop-card-print *) {
+  background-color: #f2f4f6;
+}
+
+/* Dark theme global adaptation (excluding print/export sheets) */
+html[data-theme="dark"] .app-shell-bg {
+  background-color: #0b1120 !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] main:not(.print-stage) .bg-slate-50:not(.print-sheet *):not(.pop-card-print *),
+html[data-theme="dark"] main:not(.print-stage) .bg-slate-100:not(.print-sheet *):not(.pop-card-print *),
+html[data-theme="dark"] div.min-h-screen:not(.print-sheet):not(.pop-card-print) {
+  background-color: #0b1120 !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] div:not(.print-sheet):not(.print-sheet *):not(.pop-card-print):not(.pop-card-print *):not(.schedule-pro-modal):not(.schedule-pro-modal *) > .bg-white:not(.print-sheet):not(.pop-card-print) {
+  background-color: #131c2e !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] header.bg-white\/95 {
+  background-color: rgba(11, 17, 32, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] :not(.print-sheet *):not(.pop-card-print *) > .text-slate-900,
+html[data-theme="dark"] :not(.print-sheet *):not(.pop-card-print *) > .text-slate-800 {
+  color: #f5f7fa !important;
+}
+
+html[data-theme="dark"] :not(.print-sheet *):not(.pop-card-print *) > .text-slate-600,
+html[data-theme="dark"] :not(.print-sheet *):not(.pop-card-print *) > .text-slate-500 {
+  color: #8c96a4 !important;
+}
+
+html[data-theme="dark"] input:not(.print-sheet *):not(.pop-card-print *),
+html[data-theme="dark"] select:not(.print-sheet *):not(.pop-card-print *),
+html[data-theme="dark"] textarea:not(.print-sheet *):not(.pop-card-print *) {
+  background-color: #1b1f28 !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #f5f7fa !important;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 5mm;
+}
+
+@media print {
+  html,
+  body {
+    width: 100% !important;
+    min-height: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #111315 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .no-print-number-anim {
+    display: none !important;
+  }
+
+  .only-print-number-static {
+    display: inline !important;
+  }
+
+  .print-page {
+    transform: scale(0.94) !important;
+    transform-origin: center center !important;
+  }
+
+  .print-stage {
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  .sheet-scale-wrapper {
+    width: 920px !important;
+    height: auto !important;
+    margin: 0 auto !important;
+  }
+
+  .print-sheet {
+    width: 920px !important;
+    height: auto !important;
+    transform: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+  }
+}
+
+/* ==================== Motion & Scrollbar ==================== */
+:root {
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-vaul-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes scheduleModalReveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes scheduleSheetSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.schedule-modal-enter {
+  animation: scheduleModalReveal 200ms var(--ease-out-strong) both;
+}
+
+.schedule-sheet-enter {
+  animation: scheduleSheetSlideUp 220ms var(--ease-vaul-drawer) both;
+}
+
+.schedule-tactile {
+  transition: transform 120ms var(--ease-out-strong), opacity 120ms var(--ease-out-strong), background-color 140ms ease, border-color 140ms ease;
+}
+
+.schedule-tactile:active {
+  transform: scale(0.98);
+}
+
+.schedule-tab-btn {
+  transition: transform 130ms var(--ease-out-strong), background-color 150ms ease, color 150ms ease;
+}
+
+.schedule-tab-btn:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .schedule-modal-enter,
+  .schedule-sheet-enter,
+  .schedule-tactile,
+  .schedule-tab-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ==================== Mobile-First Responsive Sheet Engine (< 640px) ==================== */
+html,
+body {
+  overflow-x: clip;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.safe-bottom-dock {
+  padding-bottom: max(0.65rem, env(safe-area-inset-bottom));
+}
+
+@media screen and (max-width: 639px) {
+  .print-sheet.mobile-fluid-sheet {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    transform: none !important;
+    padding: 16px !important;
+    border-radius: 20px !important;
+  }
+
+  .print-sheet.mobile-fluid-sheet .px-7,
+  .print-sheet.mobile-fluid-sheet .px-6,
+  .print-sheet.mobile-fluid-sheet .px-5,
+  .print-sheet.mobile-fluid-sheet .p-6,
+  .print-sheet.mobile-fluid-sheet .p-5 {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  .print-sheet.mobile-fluid-sheet .py-5,
+  .print-sheet.mobile-fluid-sheet .py-4,
+  .print-sheet.mobile-fluid-sheet .p-6,
+  .print-sheet.mobile-fluid-sheet .p-5 {
+    padding-top: 13px !important;
+    padding-bottom: 13px !important;
+  }
+
+  .print-sheet.mobile-fluid-sheet .grid-cols-12:not(.mobile-keep-grid),
+  .print-sheet.mobile-fluid-sheet .grid-cols-4:not(.mobile-keep-grid),
+  .print-sheet.mobile-fluid-sheet .grid-cols-3:not(.mobile-keep-grid),
+  .print-sheet.mobile-fluid-sheet .grid-cols-2:not(.mobile-keep-grid) {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .print-sheet.mobile-fluid-sheet :not(.mobile-keep-grid) > [class*="col-span-"] {
+    grid-column: span 1 / span 1 !important;
+  }
+
+  .print-sheet.mobile-fluid-sheet .flex.items-center.justify-between:not(.ledger-row):not(.mobile-nowrap-row),
+  .print-sheet.mobile-fluid-sheet .flex.items-end.justify-between:not(.ledger-row):not(.mobile-nowrap-row) {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .print-sheet.mobile-fluid-sheet .text-4xl {
+    font-size: 1.55rem !important;
+    line-height: 1.2 !important;
+  }
+  .print-sheet.mobile-fluid-sheet .text-3xl {
+    font-size: 1.35rem !important;
+    line-height: 1.25 !important;
+  }
+  .print-sheet.mobile-fluid-sheet .text-2xl {
+    font-size: 1.18rem !important;
+    line-height: 1.3 !important;
+  }
+  .print-sheet.mobile-fluid-sheet .text-xl {
+    font-size: 1.04rem !important;
+    line-height: 1.35 !important;
+  }
+}
+
+/* ==================== Mobile QA Hardening (Notch / Keyboard / Fold Cover 359px) ==================== */
+:root {
+  --kb-height: 0px;
+}
+
+.safe-top-header {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+.modal-kb-safe {
+  max-height: min(90dvh, calc(100dvh - var(--kb-height, 0px) - 12px));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 가상 키보드 노출 시 레이아웃 높이를 바꾸지 않고 하단 고정 독만 시각적으로 숨김 (스크롤 점프 차단) */
+html[data-keyboard-open="true"] .safe-bottom-dock {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* 모바일·태블릿에서 input/select 터치 시 자동 줌 및 스크롤 튐 원천 차단 (최소 16px 유지) */
+@media screen and (max-width: 1024px), (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* 갤럭시 Z 폴드 커버화면 등 초소형 폭(320px~359px) 텍스트 잘림·패딩 완벽 방어 */
+@media screen and (max-width: 359px) {
+  header.safe-top-header {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  .safe-bottom-dock {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  .modal-kb-safe {
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
+  }
+  .print-sheet.mobile-fluid-sheet {
+    padding: 12px !important;
+    border-radius: 16px !important;
+  }
+  .print-sheet.mobile-fluid-sheet .text-4xl {
+    font-size: 1.38rem !important;
+  }
+  .print-sheet.mobile-fluid-sheet .text-3xl {
+    font-size: 1.22rem !important;
+  }
+}
