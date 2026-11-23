@@ -718,6 +718,150 @@ export function getSubscriptionPeriodSummary(
   };
 }
 
+export interface SubscriptionPhaseSegment {
+  key: string;
+  startMonth: number;
+  endMonth: number;
+  months: number;
+  label: string;
+  activeItemCount: number;
+  endedItemCount: number;
+  baseMonthly: number;
+  hiPlusMonthly: number;
+  rawAfterPreed: number;
+  effectiveAfterPreed: number;
+  surplusAfterPreed: number;
+  cardDiscount: number;
+  rawFinalMonthly: number;
+  effectiveFinalMonthly: number;
+  surplusFinalMonthly: number;
+}
+
+export function calculateSubscriptionPhases(
+  items: SubscriptionItem[],
+  fallbackPeriod: SubscriptionPeriod = 60,
+  hiPlusMonthly = 0,
+  cardDiscount = 0
+): SubscriptionPhaseSegment[] {
+  const safeFallback: SubscriptionPeriod = normalizeSubscriptionPeriod(
+    fallbackPeriod,
+    60
+  );
+  const list = items || [];
+  const validList = list.filter(
+    (it) =>
+      (it.category || '').trim() !== '' ||
+      (it.modelName || '').trim() !== '' ||
+      (Number(it.monthlyFee) || 0) > 0 ||
+      (Number(it.contractAmount) || 0) > 0
+  );
+  const source = validList.length > 0 ? validList : list;
+  const itemPeriods: SubscriptionPeriod[] =
+    source.length > 0
+      ? source.map((it) => normalizeSubscriptionPeriod(it.period, safeFallback))
+      : [safeFallback];
+  const uniquePeriods = Array.from(new Set(itemPeriods)).sort((a, b) => a - b);
+  const isMixed = uniquePeriods.length > 1;
+
+  let prevEnd = 0;
+  return uniquePeriods.map((endMonth) => {
+    const startMonth = prevEnd + 1;
+    const months = Math.max(1, endMonth - prevEnd);
+    const activeItems = source.filter(
+      (it) => normalizeSubscriptionPeriod(it.period, safeFallback) >= endMonth
+    );
+    const endedItemCount = Math.max(0, source.length - activeItems.length);
+    const baseMonthly = activeItems.reduce(
+      (sum, it) => sum + Math.max(0, Number(it.monthlyFee) || 0),
+      0
+    );
+    const rawAfterPreed = baseMonthly - hiPlusMonthly;
+    const effectiveAfterPreed = Math.max(0, rawAfterPreed);
+    const surplusAfterPreed = Math.max(0, -rawAfterPreed);
+
+    const rawFinalMonthly = baseMonthly - hiPlusMonthly - cardDiscount;
+    const effectiveFinalMonthly = Math.max(0, rawFinalMonthly);
+    const surplusFinalMonthly = Math.max(0, -rawFinalMonthly);
+
+    prevEnd = endMonth;
+
+    return {
+      key: `phase-${startMonth}-${endMonth}`,
+      startMonth,
+      endMonth,
+      months,
+      label: isMixed ? `${startMonth}~${endMonth}개월차` : `${endMonth}개월`,
+      activeItemCount: activeItems.length,
+      endedItemCount,
+      baseMonthly,
+      hiPlusMonthly,
+      rawAfterPreed,
+      effectiveAfterPreed,
+      surplusAfterPreed,
+      cardDiscount,
+      rawFinalMonthly,
+      effectiveFinalMonthly,
+      surplusFinalMonthly,
+    };
+  });
+}
+
+export function recommendCardSpendHiPlusCounts(
+  targetMinSpend: number,
+  maxAccounts: number = MAX_FREED_ACCOUNTS
+): HiPlusCounts | null {
+  if (
+    !Number.isFinite(targetMinSpend) ||
+    targetMinSpend <= 0 ||
+    maxAccounts <= 0 ||
+    targetMinSpend > maxAccounts * 60000
+  ) {
+    return null;
+  }
+
+  if (targetMinSpend === 300000 && maxAccounts >= 6) {
+    return { hi72: 0, hi90: 6, hi108: 0 };
+  }
+
+  let best: {
+    counts: HiPlusCounts;
+    overshoot: number;
+    totalAcc: number;
+    nonZeroTypes: number;
+  } | null = null;
+
+  for (let c108 = 0; c108 <= maxAccounts; c108++) {
+    for (let c90 = 0; c90 <= maxAccounts - c108; c90++) {
+      for (let c72 = 0; c72 <= maxAccounts - c108 - c90; c72++) {
+        const totalAcc = c72 + c90 + c108;
+        if (totalAcc === 0) continue;
+        const deposit = c72 * 40000 + c90 * 50000 + c108 * 60000;
+        if (deposit < targetMinSpend) continue;
+        const overshoot = deposit - targetMinSpend;
+        const nonZeroTypes =
+          (c72 > 0 ? 1 : 0) + (c90 > 0 ? 1 : 0) + (c108 > 0 ? 1 : 0);
+        if (
+          !best ||
+          overshoot < best.overshoot ||
+          (overshoot === best.overshoot && nonZeroTypes < best.nonZeroTypes) ||
+          (overshoot === best.overshoot &&
+            nonZeroTypes === best.nonZeroTypes &&
+            totalAcc < best.totalAcc)
+        ) {
+          best = {
+            counts: { hi72: c72, hi90: c90, hi108: c108 },
+            overshoot,
+            totalAcc,
+            nonZeroTypes,
+          };
+        }
+      }
+    }
+  }
+
+  return best ? best.counts : null;
+}
+
 export function calculateSubscriptionSummary(planData: GeneralPlanData) {
   const items = planData.items || [];
   const validItems = items.filter(
@@ -796,10 +940,21 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
 
   const monthlyCashbackEquiv = 0;
 
+  const baseMonthlyAfterPreed = totalBaseMonthly - hiPlusMonthly;
+  const displayMonthlyAfterPreed = Math.max(0, baseMonthlyAfterPreed);
+  const surplusMonthlyAfterPreed = Math.max(0, -baseMonthlyAfterPreed);
+
   const monthlyBillingAfterCardAndHiPlus =
     totalBaseMonthly - cardDiscount - hiPlusMonthly;
 
   const finalMonthlyFee = monthlyBillingAfterCardAndHiPlus;
+
+  const phaseSegments = calculateSubscriptionPhases(
+    items,
+    fallbackPeriod,
+    hiPlusMonthly,
+    cardDiscount
+  );
 
   const totalMonthlyDiscountOverTerm =
     (cardDiscount + hiPlusMonthly) * representativePeriod;
@@ -809,6 +964,16 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
   const totalSubBenefit =
     totalMonthlyDiscountOverTerm + totalSubCashback;
   const finalTotalFee = totalPrincipal - totalSubBenefit;
+
+  const totalTermSurplus =
+    finalTotalFee < 0
+      ? Math.abs(finalTotalFee)
+      : !isMixedPeriod && finalMonthlyFee < 0
+      ? Math.abs(finalMonthlyFee) * representativePeriod
+      : phaseSegments.reduce(
+          (acc, seg) => acc + seg.surplusFinalMonthly * seg.months,
+          0
+        );
 
   const hasSubData =
     totalBaseMonthly > 0 ||
@@ -834,6 +999,10 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
     cardDiscount,
     hiSummary,
     hiPlusMonthly,
+    baseMonthlyAfterPreed,
+    displayMonthlyAfterPreed,
+    surplusMonthlyAfterPreed,
+    phaseSegments,
     hiPlusPayoutMethod,
     countPreedTowardCardSpend,
     targetCardMinSpend,
@@ -850,6 +1019,7 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
     totalTermBillingBeforeCashback,
     finalMonthlyFee,
     finalTotalFee,
+    totalTermSurplus,
     totalSubBenefit,
     hasSubData,
   };

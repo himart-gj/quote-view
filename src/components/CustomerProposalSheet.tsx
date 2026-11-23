@@ -7,18 +7,367 @@ import {
   getValidDisplayModelName,
   HiPlusPayoutMethod,
   normalizeSubscriptionPeriod,
+  SubscriptionPhaseSegment,
 } from '../types/proposal';
 import {
-  CardDiscountTermNotice,
-  CardSpendSimulationBadge,
-  HiPlusInBoxCallout,
-  HiPlusInlineSummaryCard,
   PreedSafetyGuideBox,
+  SubscriptionCardSpendGaugeCard,
+  SubscriptionRefundTimelineCard,
 } from './ProposalComplianceBlocks';
 
 const sanitizeFiveYearText = (text?: string): string => {
   if (!text) return '';
   return text.replace(/3년\s*(무상|A\/?S)/gi, '5년 $1');
+};
+
+interface SubscriptionReceiptBlockProps {
+  subSummary: Record<string, any>;
+  hiPlusSummary: Record<string, any>;
+  hasSubPreedActive: boolean;
+  currentCard: Record<string, any> | undefined;
+  currentCardTier: Record<string, any> | undefined;
+  subCardBenefitLabel: string;
+  subCashbackRows: { key: string; label: string; amount: number }[];
+  compact?: boolean;
+}
+
+const SubscriptionReceiptBlock: React.FC<SubscriptionReceiptBlockProps> = ({
+  subSummary,
+  hiPlusSummary,
+  hasSubPreedActive,
+  currentCard,
+  currentCardTier,
+  subCardBenefitLabel,
+  subCashbackRows,
+  compact = false,
+}) => {
+  const hasPreedBenefit =
+    hasSubPreedActive && (Number(subSummary.hiPlusMonthly) || 0) > 0;
+  const hasCardBenefit =
+    (Number(subSummary.cardDiscount) || 0) > 0 &&
+    Boolean(currentCard) &&
+    Boolean(currentCardTier);
+  const isTwoStep = hasPreedBenefit && hasCardBenefit;
+
+  const phaseSegments: SubscriptionPhaseSegment[] = Array.isArray(
+    subSummary.phaseSegments
+  )
+    ? subSummary.phaseSegments
+    : [];
+  const isMixed = Boolean(subSummary.isMixedPeriod) && phaseSegments.length >= 2;
+
+  const rawAfterPreed =
+    typeof subSummary.baseMonthlyAfterPreed === 'number'
+      ? subSummary.baseMonthlyAfterPreed
+      : (Number(subSummary.totalBaseMonthly) || 0) -
+        (hasPreedBenefit ? Number(subSummary.hiPlusMonthly) || 0 : 0);
+
+  const preedSurplus = getSubscriptionSurplusMeta(
+    rawAfterPreed,
+    subSummary.hiPlusPayoutMethod
+  );
+  const finalSurplus = getSubscriptionSurplusMeta(
+    subSummary.finalMonthlyFee,
+    subSummary.hiPlusPayoutMethod
+  );
+
+  const subTermSurplusTotal =
+    typeof subSummary.totalTermSurplus === 'number'
+      ? subSummary.totalTermSurplus
+      : subSummary.finalTotalFee < 0
+      ? Math.abs(subSummary.finalTotalFee)
+      : finalSurplus.monthlySurplus > 0
+      ? finalSurplus.monthlySurplus * subSummary.representativePeriod
+      : 0;
+
+  return (
+    <div className="rounded-2xl border border-[#D1D6DB] dark:border-slate-700/80 overflow-hidden bg-white dark:bg-[#131C2E] shadow-[0_2px_10px_rgba(25,31,40,0.04)]">
+      {!compact && (
+        <div className="px-3.5 sm:px-4 py-2.5 bg-[#191F28] dark:bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Sparkles className="w-3.5 h-3.5 text-[#FF6B78] shrink-0" />
+            <span className="text-xs sm:text-[13px] font-black tracking-tight break-keep">
+              내 맞춤 구독 결론 영수증 ({subSummary.periodLabel})
+            </span>
+          </div>
+          {subSummary.totalSubBenefit > 0 ? (
+            <span className="px-2 py-0.5 rounded-full bg-white/15 text-white text-[11px] font-extrabold font-mono tabular-nums whitespace-nowrap">
+              약정 총 -{subSummary.totalSubBenefit.toLocaleString()}원 혜택
+            </span>
+          ) : (
+            <span className="text-[11px] font-semibold text-slate-300 whitespace-nowrap">
+              방문케어 · 5년 무상 A/S 포함
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className={`${compact ? 'p-3 space-y-2.5' : 'p-3.5 sm:p-4 space-y-3'}`}>
+        {/* 기준선: 가전 원 구독료 합계 */}
+        <div className="ledger-row items-baseline pb-2.5 border-b border-[#E5E8EB] dark:border-slate-700/80">
+          <div className="ledger-row-label space-y-0.5">
+            <div className="text-xs sm:text-[13px] font-extrabold text-[#191F28] dark:text-slate-100 break-keep">
+              가전 원 구독료 합계 ({subSummary.displayItems.length}품목)
+            </div>
+            <div className="text-[10.5px] font-semibold text-[#8B95A1] dark:text-slate-400 font-mono tabular-nums break-keep">
+              약정 원금 {subSummary.totalPrincipal.toLocaleString()}원
+              {isMixed &&
+                ` · ${phaseSegments
+                  .map((s) => `${s.label} 월 ${s.baseMonthly.toLocaleString()}원`)
+                  .join(' / ')}`}
+            </div>
+          </div>
+          <span className="ledger-row-value text-sm sm:text-base font-black text-[#191F28] dark:text-white font-mono tabular-nums whitespace-nowrap">
+            월 {subSummary.totalBaseMonthly.toLocaleString()}원
+          </span>
+        </div>
+
+        {/* 1단계: Hi구독 플러스 현금지원 차감 (활성 시에만 표시) */}
+        {hasPreedBenefit && (
+          <div className="space-y-2.5">
+            <div className="ledger-row items-center">
+              <div className="ledger-row-label flex items-center gap-1.5 flex-wrap">
+                <span className="px-1.5 py-0.5 rounded bg-[#EFF6FF] dark:bg-blue-950/60 border border-[#BFDBFE] dark:border-blue-800 text-[#1B64DA] dark:text-blue-300 text-[10.5px] font-extrabold shrink-0">
+                  기본 지원
+                </span>
+                <span className="text-xs sm:text-[13px] font-bold text-[#191F28] dark:text-slate-100 break-keep">
+                  Hi구독 플러스 월 현금지원
+                </span>
+                <span className="text-[10.5px] font-semibold text-[#8B95A1] dark:text-slate-400 font-mono tabular-nums whitespace-nowrap">
+                  (총 {hiPlusSummary.totalHiPlusSupport.toLocaleString()}원)
+                </span>
+              </div>
+              <span className="ledger-row-value text-[13px] sm:text-sm font-extrabold text-[#1B64DA] dark:text-blue-400 font-mono tabular-nums whitespace-nowrap">
+                월 -{subSummary.hiPlusMonthly.toLocaleString()}원
+              </span>
+            </div>
+
+            {/* 2단 수식일 때만 중간 결론('카드 조건 없이도 기본 월 체감가') 노출 */}
+            {isTwoStep && (
+              <div className="rounded-xl bg-[#F8FAFC] dark:bg-slate-800/80 border border-[#D1D6DB] dark:border-slate-700 p-3 space-y-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <span className="text-xs sm:text-[13px] font-black text-[#191F28] dark:text-white break-keep">
+                      카드 조건 없이도 기본 월 체감가
+                    </span>
+                    <div className="text-[10.5px] font-semibold text-[#6B7684] dark:text-slate-400">
+                      제휴카드 미사용 · 실적 부담 없는 기본 혜택가
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[clamp(1.25rem,5.2vw,1.6rem)] font-black tracking-tight text-[#191F28] dark:text-white font-mono tabular-nums whitespace-nowrap leading-none">
+                      {preedSurplus.isSurplusZone ? (
+                        '월 0원'
+                      ) : (
+                        <>
+                          월{' '}
+                          <SpringNumberFlow
+                            value={preedSurplus.displayNetMonthly}
+                            suffix="원"
+                          />
+                        </>
+                      )}
+                    </div>
+                    {preedSurplus.monthlySurplus > 0 && (
+                      <div className="text-[10.5px] font-extrabold text-emerald-700 dark:text-emerald-300 font-mono tabular-nums mt-0.5">
+                        {preedSurplus.surplusInlineText}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {isMixed && (
+                  <div className="pt-2 border-t border-[#E5E8EB] dark:border-slate-700 grid grid-cols-2 mobile-keep-grid gap-2">
+                    {phaseSegments.map((seg) => (
+                      <div
+                        key={`preed-${seg.key}`}
+                        className="min-w-0 rounded-lg bg-white dark:bg-slate-900/70 border border-[#E5E8EB] dark:border-slate-700 px-2.5 py-1.5 flex flex-col justify-between"
+                      >
+                        <span className="text-[10px] font-bold text-[#6B7684] dark:text-slate-400 break-keep">
+                          {seg.label} 기본 체감
+                        </span>
+                        <span className="text-xs font-black text-[#191F28] dark:text-white font-mono tabular-nums whitespace-nowrap mt-0.5">
+                          {seg.surplusAfterPreed > 0
+                            ? `월 0원 (+${seg.surplusAfterPreed.toLocaleString()}원)`
+                            : `월 ${seg.effectiveAfterPreed.toLocaleString()}원`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2단계: 제휴카드 추가 혜택 (활성 시에만 표시) */}
+        {hasCardBenefit && currentCard && currentCardTier && (
+          <div className="ledger-row items-center pt-0.5">
+            <div className="ledger-row-label flex items-center gap-1.5 flex-wrap">
+              <span className="px-1.5 py-0.5 rounded bg-[#FFF1F2] dark:bg-rose-950/60 border border-[#FECDD3] dark:border-rose-800 text-[#E60012] dark:text-rose-300 text-[10.5px] font-extrabold shrink-0">
+                {isTwoStep ? '+ 카드 추가' : '카드 혜택'}
+              </span>
+              <span className="text-xs sm:text-[13px] font-bold text-[#191F28] dark:text-slate-100 break-keep">
+                {currentCard.name} 월 {subCardBenefitLabel}
+              </span>
+              <span className="text-[10.5px] font-semibold text-[#8B95A1] dark:text-slate-400 whitespace-nowrap">
+                ({currentCardTier.minSpendShort} 이상)
+              </span>
+            </div>
+            <span className="ledger-row-value text-[13px] sm:text-sm font-extrabold text-[#E60012] dark:text-[#FF6B78] font-mono tabular-nums whitespace-nowrap">
+              월 -{subSummary.cardDiscount.toLocaleString()}원
+            </span>
+          </div>
+        )}
+
+        {/* 최종 월 체감가 결론 박스 — 블록 내 유일 노출 */}
+        <div className="rounded-xl bg-gradient-to-br from-[#FFF1F2] via-[#FFF6F7] to-white dark:from-rose-950/55 dark:via-[#161D2F] dark:to-[#131C2E] border-2 border-[#E60012] dark:border-[#FF3B47] p-3.5 sm:p-4 space-y-2.5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="space-y-0.5">
+              <div className="text-xs sm:text-sm font-black text-[#E60012] dark:text-[#FF6B78] break-keep">
+                {isTwoStep
+                  ? '제휴카드 추가 적용 시 최종 월 체감가'
+                  : hasPreedBenefit
+                  ? '카드 조건 없이 최종 월 체감가'
+                  : hasCardBenefit
+                  ? '제휴카드 적용 최종 월 체감가'
+                  : '월 구독료 합계'}
+              </div>
+              <div className="text-[10.5px] font-semibold text-[#4E5968] dark:text-slate-300 break-keep">
+                {isMixed
+                  ? `${phaseSegments[0].label} 기준 · 아래 구간별 변화 확인`
+                  : `${subSummary.periodLabel} 약정 기준`}
+              </div>
+            </div>
+
+            <div className="text-right">
+              <div
+                className={`${
+                  compact
+                    ? 'text-[clamp(1.4rem,6vw,1.85rem)]'
+                    : 'text-[clamp(1.7rem,7.2vw,2.2rem)]'
+                } font-black tracking-tight text-[#E60012] dark:text-[#FF5A65] font-mono tabular-nums whitespace-nowrap leading-none`}
+              >
+                {finalSurplus.isSurplusZone ? (
+                  '월 0원'
+                ) : (
+                  <>
+                    월{' '}
+                    <SpringNumberFlow
+                      value={Math.max(0, subSummary.finalMonthlyFee)}
+                      suffix="원"
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {finalSurplus.surplusBadgeText && (
+            <div className="inline-flex items-center px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11.5px] sm:text-xs font-black font-mono tabular-nums break-keep">
+              {finalSurplus.surplusBadgeText}
+            </div>
+          )}
+
+          {/* 36+60개월 혼합 약정 시 구간별 최종 월 체감가 나란히 비교 */}
+          {isMixed && (
+            <div className="pt-2 border-t border-[#FECDD3] dark:border-rose-800/70 grid grid-cols-2 mobile-keep-grid gap-2">
+              {phaseSegments.map((seg, idx) => {
+                const isLaterPhase = idx > 0;
+                return (
+                  <div
+                    key={`final-${seg.key}`}
+                    className={`min-w-0 rounded-xl px-2.5 py-2 border flex flex-col justify-between ${
+                      isLaterPhase
+                        ? 'bg-emerald-50/90 dark:bg-emerald-950/45 border-emerald-300 dark:border-emerald-700/80'
+                        : 'bg-white/90 dark:bg-slate-900/80 border-[#FECDD3] dark:border-rose-800/70'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                      <span
+                        className={`text-[10.5px] font-extrabold break-keep ${
+                          isLaterPhase
+                            ? 'text-emerald-800 dark:text-emerald-300'
+                            : 'text-[#4E5968] dark:text-slate-300'
+                        }`}
+                      >
+                        {seg.label}
+                      </span>
+                      <span className="text-[9.5px] font-bold text-[#8B95A1] dark:text-slate-400 whitespace-nowrap">
+                        {seg.endedItemCount > 0
+                          ? `완납 후 ${seg.activeItemCount}품목`
+                          : `${seg.activeItemCount}품목`}
+                      </span>
+                    </div>
+                    <div
+                      className={`mt-1 text-[clamp(0.875rem,3.8vw,1.05rem)] font-black font-mono tabular-nums whitespace-nowrap ${
+                        isLaterPhase
+                          ? 'text-emerald-700 dark:text-emerald-300'
+                          : 'text-[#E60012] dark:text-[#FF5A65]'
+                      }`}
+                    >
+                      {seg.surplusFinalMonthly > 0
+                        ? '월 0원'
+                        : `월 ${seg.effectiveFinalMonthly.toLocaleString()}원`}
+                    </div>
+                    {seg.surplusFinalMonthly > 0 && (
+                      <span className="text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300 font-mono tabular-nums whitespace-nowrap mt-0.5">
+                        +월 {seg.surplusFinalMonthly.toLocaleString()}원 혜택
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 1회성 금액대·추가 캐시백 보너스 (활성 시에만 표시) */}
+        {subCashbackRows.length > 0 && (
+          <div className="rounded-xl bg-[#EFF6FF] dark:bg-blue-950/40 border border-[#BFDBFE] dark:border-blue-800/70 px-3 py-2 space-y-1.5">
+            {subCashbackRows.map((row) => (
+              <div key={row.key} className="ledger-row items-center text-xs">
+                <div className="ledger-row-label flex items-center gap-1.5">
+                  <span className="px-1.5 py-0.5 rounded bg-[#1B64DA] text-white text-[10px] font-extrabold shrink-0">
+                    보너스 환급
+                  </span>
+                  <span className="font-bold text-[#191F28] dark:text-slate-100 break-keep">
+                    {row.label}
+                  </span>
+                </div>
+                <span className="ledger-row-value font-extrabold text-[#1B64DA] dark:text-blue-300 font-mono tabular-nums whitespace-nowrap">
+                  -{row.amount.toLocaleString()}원
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 약정 기간 총 체감 합계 바 */}
+      <div className="ledger-row items-center px-3.5 sm:px-4 py-2.5 bg-[#F8FAFC] dark:bg-slate-800/80 border-t border-[#E5E8EB] dark:border-slate-700/80 text-xs">
+        <div className="ledger-row-label space-y-0.5">
+          <span className="font-extrabold text-[#4E5968] dark:text-slate-300">
+            {subSummary.periodLabel} 약정 총 체감 합계
+          </span>
+          {subTermSurplusTotal > 0 && (
+            <div className="text-[10.5px] font-extrabold text-emerald-700 dark:text-emerald-300 font-mono tabular-nums break-keep">
+              약정 기간 누적 +{subTermSurplusTotal.toLocaleString()}원 초과 혜택 예상
+            </div>
+          )}
+        </div>
+        <span className="ledger-row-value text-sm sm:text-base font-black text-[#191F28] dark:text-white font-mono tabular-nums whitespace-nowrap">
+          {finalSurplus.isSurplusZone || subSummary.finalTotalFee <= 0 ? (
+            '총 0원'
+          ) : (
+            <>
+              총 <SpringNumberFlow value={subSummary.finalTotalFee} suffix="원" />
+            </>
+          )}
+        </span>
+      </div>
+    </div>
+  );
 };
 
 export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
@@ -29,13 +378,13 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
   generalHiPreed,
   generalSummary,
   hasBothPlans,
+  hideInlineSafetyBox = false,
   hiPlusSummary,
   hybridCombinedNetTotal,
   hybridTotalDiscountAndSupport,
   onSelectPayoutMethod,
   simState,
   subCardBenefitLabel,
-  subFormulaText,
   subHeaderTitle,
   subSummary,
 }) => {
@@ -131,22 +480,15 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
     (!simState.hideHiPreed ? generalSummary.hiFreedSupport : 0);
   const step2TotalRefund =
     generalSummary.totalStep2Cashback + generalSummary.totalStep2ExtraBenefit;
-  const subMonthlyTotalDiscount =
-    subSummary.cardDiscount +
-    (!simState.hideSubPreed ? subSummary.hiPlusMonthly : 0);
 
   const subSurplus = getSubscriptionSurplusMeta(
     subSummary.finalMonthlyFee,
     subSummary.hiPlusPayoutMethod
   );
-  const subTermSurplusTotal =
-    subSurplus.monthlySurplus > 0
-      ? subSurplus.monthlySurplus * subSummary.representativePeriod
-      : subSummary.finalTotalFee < 0
-      ? Math.abs(subSummary.finalTotalFee)
-      : 0;
   const hasSubPreedActive =
     !simState.hideSubPreed && (hiPlusSummary?.totalAccounts || 0) > 0;
+  const hasSubCardActive =
+    subSummary.cardDiscount > 0 && Boolean(currentCard) && Boolean(currentCardTier);
   const handlePayoutSelect = onSelectPayoutMethod as
     | ((method: HiPlusPayoutMethod) => void)
     | undefined;
@@ -452,10 +794,10 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
         </div>
       )}
 
-      {/* ==================== CASE B: 구독구매 단독 스토리 제안서 ==================== */}
+      {/* ==================== CASE B: 구독구매 단독 제안서 (무중복 4블록 구조) ==================== */}
       {simState.quoteMode === 'subscription' && (
         <div className="space-y-3 sm:space-y-4">
-          {/* 1. 공식 구독 마스트헤드 */}
+          {/* 공식 구독 제안서 마스트헤드 */}
           <div className="border-b border-[#E5E8EB] dark:border-slate-700/80 pb-2 sm:pb-3 flex flex-wrap items-end justify-between gap-1.5">
             <div className="min-w-0 flex-1 basis-48 space-y-0.5">
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -481,161 +823,28 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
             </span>
           </div>
 
-          {/* 2. 핵심 1~2줄 요약 배너 */}
-          <div className="rounded-xl bg-[#F8FAFC] dark:bg-slate-800/60 border border-[#E5E8EB] dark:border-slate-700/80 px-3 py-2 sm:px-3.5 sm:py-2.5">
-            <p className="text-[11.5px] sm:text-[13px] font-semibold text-[#4E5968] dark:text-slate-300 leading-snug break-keep">
-              {subMonthlyTotalDiscount > 0 || subSummary.totalSubBenefit > 0 ? (
-                <>
-                  {subSummary.displayItems.length}품목 기본{' '}
-                  <strong className="font-mono tabular-nums whitespace-nowrap font-bold text-[#191F28] dark:text-white">
-                    월 {subSummary.totalBaseMonthly.toLocaleString()}원
-                  </strong>{' '}
-                  → 혜택{' '}
-                  <strong className="font-mono tabular-nums whitespace-nowrap font-extrabold text-[#1B64DA] dark:text-blue-400">
-                    -{subMonthlyTotalDiscount.toLocaleString()}원
-                  </strong>{' '}
-                  적용 시{' '}
-                  {subSurplus.isSurplusZone ? (
-                    <>
-                      <strong className="font-mono tabular-nums whitespace-nowrap font-extrabold text-[#E60012] dark:text-[#FF5A65]">
-                        월 0원
-                      </strong>
-                      {subSurplus.surplusInlineText && (
-                        <>
-                          {' '}
-                          <strong className="font-mono tabular-nums font-extrabold text-emerald-700 dark:text-emerald-300">
-                            ({subSurplus.surplusInlineText})
-                          </strong>
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <strong className="font-mono tabular-nums whitespace-nowrap font-extrabold text-[#E60012] dark:text-[#FF5A65]">
-                      월 체감 {subSummary.finalMonthlyFee.toLocaleString()}원
-                    </strong>
-                  )}
-                </>
-              ) : (
-                <>
-                  {subSummary.displayItems.length}품목 방문케어·5년 무상 A/S 포함{' '}
-                  <strong className="font-mono tabular-nums whitespace-nowrap font-extrabold text-[#E60012] dark:text-[#FF5A65]">
-                    월 {Math.max(0, subSummary.finalMonthlyFee).toLocaleString()}원
-                  </strong>{' '}
-                  구독 제안입니다.
-                </>
-              )}
-            </p>
-          </div>
+          {/* [블록 1] 내 맞춤 구독 결론 영수증 카드 — 단일 수식 1회 노출 */}
+          <SubscriptionReceiptBlock
+            subSummary={subSummary}
+            hiPlusSummary={hiPlusSummary}
+            hasSubPreedActive={hasSubPreedActive}
+            currentCard={currentCard}
+            currentCardTier={currentCardTier}
+            subCardBenefitLabel={subCardBenefitLabel}
+            subCashbackRows={subCashbackRows}
+          />
 
-          {/* 3. 히어로 가격 집중 레이아웃 (메인 ③ 최종 월 체감 구독료 + 하단 컴팩트 2열 요약 ①·②) */}
-          <div className="space-y-2">
-            {/* 메인 히어로 카드: ③ 최종 월 체감 구독료 */}
-            <div className="rounded-2xl bg-gradient-to-br from-[#FFF1F2] via-[#FFF6F7] to-white dark:from-rose-950/55 dark:via-[#161D2F] dark:to-[#131C2E] border-2 border-[#E60012] dark:border-[#FF3B47] p-3.5 sm:p-5 shadow-[0_6px_20px_rgba(230,0,18,0.08)]">
-              <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                <span className="inline-flex items-center gap-1 text-xs sm:text-[13px] font-black text-[#E60012] dark:text-[#FF6B78]">
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                  ③ 최종 월 체감 구독료 ({subSummary.periodLabel})
-                </span>
-                {subSummary.totalSubBenefit > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-white dark:bg-slate-900 border border-[#FECDD3] dark:border-rose-700 text-[#E60012] dark:text-rose-300 text-[11px] font-extrabold font-mono tabular-nums whitespace-nowrap">
-                    총 -{subSummary.totalSubBenefit.toLocaleString()}원 혜택
-                  </span>
-                )}
-              </div>
-
-              <div className="mt-2">
-                {subSurplus.isSurplusZone ? (
-                  <div className="space-y-1.5">
-                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                      <div className="text-[clamp(1.75rem,7.5vw,2.25rem)] font-black tracking-tight text-[#E60012] dark:text-[#FF5A65] font-mono tabular-nums whitespace-nowrap leading-none">
-                        월 0원
-                      </div>
-                      <span className="text-[11px] font-bold text-[#4E5968] dark:text-slate-300 font-mono tabular-nums whitespace-nowrap">
-                        {subTermSurplusTotal > 0
-                          ? `약정 기간 총 +${subTermSurplusTotal.toLocaleString()}원 초과 혜택 예상`
-                          : `${subSummary.periodLabel} 총 체감 0원`}
-                      </span>
-                    </div>
-                    {subSurplus.surplusBadgeText && (
-                      <div className="inline-flex items-center px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11.5px] sm:text-xs font-black font-mono tabular-nums break-keep shadow-2xs">
-                        {subSurplus.surplusBadgeText}
-                      </div>
-                    )}
-                    <p className="text-[10.5px] font-semibold text-[#4E5968] dark:text-slate-300 leading-snug break-keep pt-0.5">
-                      ※ {subSummary.periodLabel} 약정 · 제휴카드 전월 실적 조건 충족 기준
-                      {hasSubPreedActive && (
-                        <>
-                          {' '}· 지원상품(Hi구독 플러스) 월 납입금{' '}
-                          <strong className="font-mono tabular-nums whitespace-nowrap text-[#191F28] dark:text-white">
-                            {hiPlusSummary.totalMonthlyDeposit.toLocaleString()}원
-                          </strong>
-                          (1~90회 납입)은 별도입니다
-                        </>
-                      )}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                    <div className="text-[clamp(1.75rem,7.5vw,2.25rem)] font-black tracking-tight text-[#E60012] dark:text-[#FF5A65] font-mono tabular-nums whitespace-nowrap leading-none">
-                      월 <SpringNumberFlow value={subSummary.finalMonthlyFee} suffix="원" />
-                    </div>
-                    <div className="text-[11.5px] font-bold text-[#4E5968] dark:text-slate-300 font-mono tabular-nums whitespace-nowrap">
-                      {subSummary.finalTotalFee <= 0
-                        ? `${subSummary.periodLabel} 총 체감 0원`
-                        : `${subSummary.periodLabel} 총 체감 ${subSummary.finalTotalFee.toLocaleString()}원`}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 컴팩트 2열 계산 요약: ① 월 기본 구독료 + ② 매월 할인·캐시백 혜택 */}
-            <div className="grid grid-cols-2 mobile-keep-grid gap-2">
-              <div className="min-w-0 rounded-xl bg-[#191F28] dark:bg-slate-900 border border-transparent dark:border-slate-700 text-white px-3 py-2.5 flex flex-col justify-between overflow-hidden">
-                <span className="text-[10.5px] font-extrabold text-slate-300 break-keep">
-                  ① 월 기본 구독료 ({subSummary.periodLabel})
-                </span>
-                <div className="mt-1 text-[clamp(0.95rem,4vw,1.25rem)] font-black font-mono tabular-nums whitespace-nowrap tracking-tight">
-                  월 {subSummary.totalBaseMonthly.toLocaleString()}원
-                </div>
-                <div className="text-[10px] text-slate-300 mt-0.5 font-mono tabular-nums whitespace-nowrap truncate">
-                  기준 원금 {subSummary.totalPrincipal.toLocaleString()}원
-                </div>
-              </div>
-
-              <div className="min-w-0 rounded-xl bg-[#EFF6FF] dark:bg-blue-950/40 border border-[#BFDBFE] dark:border-blue-800/60 px-3 py-2.5 flex flex-col justify-between overflow-hidden">
-                <span className="text-[10.5px] font-extrabold text-[#1B64DA] dark:text-blue-300 break-keep">
-                  ② 매월 할인 · 캐시백 혜택
-                </span>
-                <div className="mt-1 text-[clamp(0.95rem,4vw,1.25rem)] font-black text-[#1B64DA] dark:text-blue-400 font-mono tabular-nums whitespace-nowrap tracking-tight">
-                  {subMonthlyTotalDiscount > 0
-                    ? `월 -${subMonthlyTotalDiscount.toLocaleString()}원`
-                    : subSummary.totalSubCashback > 0
-                    ? `-${subSummary.totalSubCashback.toLocaleString()}원`
-                    : '0원'}
-                </div>
-                <div className="text-[10px] font-semibold text-[#4E5968] dark:text-slate-300 mt-0.5 font-mono tabular-nums whitespace-nowrap truncate">
-                  {subSummary.totalSubBenefit > 0
-                    ? `총 -${subSummary.totalSubBenefit.toLocaleString()}원 혜택`
-                    : '제휴카드·프리드 결합 가능'}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 4. STEP 1 · 구독 가전 및 무상 케어 내역 */}
+          {/* [블록 2] 선택 가전 및 무상 케어 명세 — 차감표 재반복 없는 순수 명세 */}
           <div className="rounded-2xl border border-[#E5E8EB] dark:border-slate-700/80 overflow-hidden bg-white dark:bg-[#131C2E]">
             <div className="px-3.5 sm:px-4 py-2.5 bg-[#F8FAFC] dark:bg-slate-800/70 border-b border-[#E5E8EB] dark:border-slate-700/80 flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="px-1.5 py-0.5 rounded bg-[#191F28] dark:bg-slate-700 text-white text-[11px] font-extrabold shrink-0 whitespace-nowrap">
-                  STEP 1
-                </span>
-                <span className="text-xs font-extrabold text-[#191F28] dark:text-slate-100 break-keep">
-                  구독 가전 및 무상 케어 내역 ({subSummary.displayItems.length}품목)
+                <RefreshCw className="w-3.5 h-3.5 text-[#1B64DA] dark:text-blue-400 shrink-0" />
+                <span className="text-xs sm:text-[13px] font-extrabold text-[#191F28] dark:text-slate-100 break-keep">
+                  선택 가전 · 무상 케어 명세 ({subSummary.displayItems.length}품목)
                 </span>
               </div>
               <span className="text-[11px] font-bold text-[#8B95A1] dark:text-slate-400 shrink-0 whitespace-nowrap">
-                월 구독료 · 기준가
+                개별 구독료 · 약정 기준가
               </span>
             </div>
             <div className="divide-y divide-[#E5E8EB] dark:divide-slate-700/70">
@@ -689,199 +898,51 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                 );
               })}
             </div>
-            <div className="ledger-row items-center px-3.5 sm:px-4 py-2.5 bg-[#F8FAFC] dark:bg-slate-800/70 border-t border-[#E5E8EB] dark:border-slate-700/80">
-              <div className="ledger-row-label">
-                <div className="text-xs font-extrabold text-[#4E5968] dark:text-slate-300">
-                  총 월 기본 구독료 ({subSummary.periodLabel})
-                </div>
-                {subSummary.totalPrincipal > 0 && (
-                  <div className="text-[11px] font-semibold text-[#6B7684] dark:text-slate-400 font-mono tabular-nums">
-                    제품 기준 금액(약정 원금) 합계 {subSummary.totalPrincipal.toLocaleString()}원
-                  </div>
-                )}
-              </div>
-              <span className="ledger-row-value text-sm sm:text-base font-black text-[#191F28] dark:text-white font-mono tabular-nums whitespace-nowrap">
-                월 {subSummary.totalBaseMonthly.toLocaleString()}원
-              </span>
-            </div>
           </div>
 
-          {/* 5. STEP 2 · 월 혜택 차감 및 체감가 계산 */}
-          <div className="rounded-2xl border border-[#E5E8EB] dark:border-slate-700/80 overflow-hidden bg-white dark:bg-[#131C2E]">
-            <div className="px-3.5 sm:px-4 py-2.5 bg-[#F8FAFC] dark:bg-slate-800/70 border-b border-[#E5E8EB] dark:border-slate-700/80 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="px-1.5 py-0.5 rounded bg-[#1B64DA] text-white text-[11px] font-extrabold shrink-0 whitespace-nowrap">
-                  STEP 2
-                </span>
-                <span className="text-xs font-extrabold text-[#191F28] dark:text-slate-100 break-keep">
-                  월 혜택 차감 및 체감가 계산
-                </span>
-              </div>
-              <span className="text-[11px] font-semibold text-[#8B95A1] dark:text-slate-400 truncate">
-                {subFormulaText}
-              </span>
-            </div>
-
-            <div className="divide-y divide-[#E5E8EB] dark:divide-slate-700/70">
-              {subSummary.cardDiscount > 0 && currentCard && currentCardTier && (
-                <div className="px-3.5 sm:px-4 py-2.5 space-y-1.5">
-                  <div className="ledger-row">
-                    <div className="ledger-row-label flex items-center gap-1.5 flex-wrap">
-                      <span className="px-1.5 py-0.5 rounded bg-[#EFF6FF] dark:bg-blue-950/60 border border-[#BFDBFE] dark:border-blue-800 text-[#1B64DA] dark:text-blue-300 text-[11px] font-extrabold shrink-0">
-                        매월 카드
-                      </span>
-                      <span className="text-[12.5px] sm:text-sm font-bold text-[#191F28] dark:text-slate-100">
-                        {currentCard.name} 월 {subCardBenefitLabel}
-                      </span>
-                      <span className="text-[11px] font-medium text-[#8B95A1] dark:text-slate-400">
-                        ({currentCardTier.minSpendLabel})
-                      </span>
-                    </div>
-                    <span className="ledger-row-value text-[13px] sm:text-sm font-extrabold text-[#1B64DA] dark:text-blue-400 font-mono tabular-nums whitespace-nowrap">
-                      월 -{subSummary.cardDiscount.toLocaleString()}원
-                    </span>
-                  </div>
-                  <CardSpendSimulationBadge
-                    enabled={subSummary.countPreedTowardCardSpend}
-                    payoutMethod={subSummary.hiPlusPayoutMethod}
-                    recognizedPreedSpend={subSummary.recognizedPreedSpend || 0}
-                    additionalCardSpendNeeded={subSummary.additionalCardSpendNeeded || 0}
-                    targetCardMinSpend={subSummary.targetCardMinSpend || 0}
-                  />
-                  <CardDiscountTermNotice
-                    cardDiscount={subSummary.cardDiscount}
-                    benefitLabel={subCardBenefitLabel}
-                    representativePeriod={subSummary.representativePeriod}
-                  />
-                </div>
+          {/* [블록 3] 안심 검증 2종 카드 — 전체 페이지 내 유일 노출 */}
+          {(hasSubPreedActive || hasSubCardActive) && (
+            <div className="space-y-3">
+              {hasSubPreedActive && (
+                <SubscriptionRefundTimelineCard
+                  hiSummary={hiPlusSummary}
+                  payoutMethod={subSummary.hiPlusPayoutMethod}
+                  onSelectPayoutMethod={handlePayoutSelect}
+                  useMobileFluid
+                />
               )}
 
-              {!simState.hideSubPreed && subSummary.hiPlusMonthly > 0 && (
-                <div className="ledger-row px-3.5 sm:px-4 py-2.5">
-                  <div className="ledger-row-label flex items-center gap-1.5">
-                    <span className="px-1.5 py-0.5 rounded bg-[#EFF6FF] dark:bg-blue-950/60 border border-[#BFDBFE] dark:border-blue-800 text-[#1B64DA] dark:text-blue-300 text-[11px] font-extrabold shrink-0">
-                      매월 지원
-                    </span>
-                    <span className="text-[12.5px] sm:text-sm font-bold text-[#191F28] dark:text-slate-100">
-                      구독프리드 (Hi구독 플러스) 월 지원금
-                    </span>
-                  </div>
-                  <span className="ledger-row-value text-[13px] sm:text-sm font-extrabold text-[#1B64DA] dark:text-blue-400 font-mono tabular-nums whitespace-nowrap">
-                    월 -{subSummary.hiPlusMonthly.toLocaleString()}원
-                  </span>
-                </div>
+              {hasSubCardActive && currentCard && currentCardTier && (
+                <SubscriptionCardSpendGaugeCard
+                  cardName={currentCard.name}
+                  benefitLabel={subCardBenefitLabel}
+                  cardDiscount={subSummary.cardDiscount}
+                  minSpendLabel={currentCardTier.minSpendLabel}
+                  targetCardMinSpend={subSummary.targetCardMinSpend || 0}
+                  countPreedTowardCardSpend={subSummary.countPreedTowardCardSpend}
+                  hasSubPreedActive={hasSubPreedActive}
+                  payoutMethod={subSummary.hiPlusPayoutMethod}
+                  recognizedPreedSpend={subSummary.recognizedPreedSpend || 0}
+                  additionalCardSpendNeeded={subSummary.additionalCardSpendNeeded || 0}
+                  representativePeriod={subSummary.representativePeriod}
+                />
               )}
-
-              <div className="px-3.5 sm:px-4 py-3.5 bg-[#FFF1F2] dark:bg-rose-950/35 border-t-2 border-[#E60012] dark:border-[#FF3B47]">
-                <div className="ledger-row items-start">
-                  <div className="ledger-row-label space-y-1">
-                    {subSurplus.isSurplusZone && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white dark:bg-slate-900 border border-[#FECDD3] dark:border-rose-700 text-[#E60012] dark:text-rose-300 text-[10.5px] font-extrabold">
-                        약정 기간 · 제휴카드 전월 실적 조건 적용 기준
-                      </span>
-                    )}
-                    <div className="text-sm sm:text-base font-black text-[#E60012] dark:text-[#FF6B78]">
-                      ③ 최종 월 체감 구독료 ({subSummary.periodLabel})
-                    </div>
-                    {subSurplus.surplusBadgeText && (
-                      <div className="pt-0.5 space-y-1">
-                        <div className="inline-flex items-center px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs font-black font-mono tabular-nums break-keep">
-                          {subSurplus.surplusBadgeText}
-                        </div>
-                        <div className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 break-keep">
-                          매월 지원 혜택이 월 기본 구독료보다{' '}
-                          <span className="font-mono tabular-nums whitespace-nowrap">
-                            {subSurplus.monthlySurplus.toLocaleString()}원
-                          </span>{' '}
-                          더 많습니다
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <span className="ledger-row-value text-xl sm:text-2xl font-black text-[#E60012] dark:text-[#FF5A65] font-mono tabular-nums whitespace-nowrap">
-                    {subSurplus.isSurplusZone ? (
-                      '월 0원'
-                    ) : (
-                      <>
-                        월 <SpringNumberFlow value={subSummary.finalMonthlyFee} suffix="원" />
-                      </>
-                    )}
-                  </span>
-                </div>
-                {hasSubPreedActive && (
-                  <HiPlusInBoxCallout
-                    totalAccounts={hiPlusSummary.totalAccounts}
-                    totalMonthlyDeposit={hiPlusSummary.totalMonthlyDeposit}
-                    totalMaturityRefund={hiPlusSummary.totalMaturityRefund}
-                  />
-                )}
-              </div>
-
-              {subCashbackRows.map((row) => (
-                <div key={row.key} className="ledger-row px-3.5 sm:px-4 py-2.5">
-                  <div className="ledger-row-label flex items-center gap-1.5">
-                    <span className="px-1.5 py-0.5 rounded bg-[#EFF6FF] dark:bg-blue-950/60 border border-[#BFDBFE] dark:border-blue-800 text-[#1B64DA] dark:text-blue-300 text-[11px] font-extrabold shrink-0">
-                      1회 환급
-                    </span>
-                    <span className="text-[12.5px] sm:text-sm font-bold text-[#191F28] dark:text-slate-100">
-                      {row.label}
-                    </span>
-                  </div>
-                  <span className="ledger-row-value text-[13px] sm:text-sm font-extrabold text-[#1B64DA] dark:text-blue-400 font-mono tabular-nums whitespace-nowrap">
-                    -{row.amount.toLocaleString()}원
-                  </span>
-                </div>
-              ))}
-
-              <div className="ledger-row items-center px-3.5 sm:px-4 py-3 bg-[#191F28] dark:bg-slate-900 text-white">
-                <div className="ledger-row-label space-y-0.5">
-                  <div className="text-xs sm:text-sm font-black text-white">
-                    최종 {subSummary.periodLabel} 총 체감가 합계
-                  </div>
-                  {subSurplus.isSurplusZone || subSummary.finalTotalFee <= 0 ? (
-                    <div className="text-[11px] font-bold text-emerald-300 font-mono tabular-nums break-keep">
-                      {subTermSurplusTotal > 0
-                        ? `약정 기간 총 +${subTermSurplusTotal.toLocaleString()}원 초과 혜택 예상`
-                        : `약정 원금 ${subSummary.totalPrincipal.toLocaleString()}원 기준`}
-                    </div>
-                  ) : (
-                    <div className="text-[11px] text-slate-300 font-mono tabular-nums break-keep">
-                      약정 원금 {subSummary.totalPrincipal.toLocaleString()}원 기준
-                    </div>
-                  )}
-                </div>
-                <span className="ledger-row-value text-base sm:text-xl font-black text-white font-mono tabular-nums whitespace-nowrap">
-                  {subSurplus.isSurplusZone || subSummary.finalTotalFee <= 0 ? (
-                    '0원'
-                  ) : (
-                    <SpringNumberFlow value={subSummary.finalTotalFee} suffix="원" />
-                  )}
-                </span>
-              </div>
             </div>
-          </div>
-
-          {hasSubPreedActive && (
-            <HiPlusInlineSummaryCard
-              hiSummary={hiPlusSummary}
-              representativePeriod={subSummary.representativePeriod}
-              payoutMethod={subSummary.hiPlusPayoutMethod}
-              onSelectPayoutMethod={handlePayoutSelect}
-              useMobileFluid
-            />
           )}
 
-          <PreedSafetyGuideBox
-            hasHiPlus={hasSubPreedActive}
-            hasGeneralHiPreed={false}
-          />
+          {!hideInlineSafetyBox && (
+            <PreedSafetyGuideBox
+              hasHiPlus={hasSubPreedActive}
+              hasGeneralHiPreed={false}
+            />
+          )}
         </div>
       )}
 
-      {/* ==================== CASE C: 일반+구독 혼합 스토리 제안서 ==================== */}
+      {/* ==================== CASE C: 일반+구독 혼합 제안서 (구독 파트 무중복 4블록 동기화) ==================== */}
       {simState.quoteMode === 'hybrid' && (
         <div className="space-y-3 sm:space-y-4">
-          {/* 1. 통합 마스트헤드 */}
+          {/* 통합 마스트헤드 */}
           <div className="border-b border-[#E5E8EB] dark:border-slate-700/80 pb-2.5 sm:pb-3 flex flex-wrap items-end justify-between gap-2">
             <div className="min-w-0 flex-1 basis-48 space-y-0.5">
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -912,104 +973,35 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
             </div>
           </div>
 
-          {/* 2. 한 줄 통합 브리핑 배너 */}
-          <div className="rounded-xl bg-[#F8FAFC] dark:bg-slate-800/60 border border-[#E5E8EB] dark:border-slate-700/80 px-3 py-2 sm:px-3.5 sm:py-2.5">
-            <p className="text-[11.5px] sm:text-[13px] font-semibold text-[#4E5968] dark:text-slate-300 leading-snug break-keep">
-              일반구매 <strong className="font-extrabold text-[#191F28] dark:text-white">{generalSummary.displayItems.length}품목</strong>(
-              <strong className="font-mono tabular-nums whitespace-nowrap font-bold text-[#191F28] dark:text-white">{generalSummary.rawNet.toLocaleString()}원</strong>) + 구독{' '}
-              <strong className="font-extrabold text-[#191F28] dark:text-white">{subSummary.displayItems.length}품목</strong>(
-              {subSurplus.isSurplusZone ? (
-                <>
-                  <strong className="font-mono tabular-nums whitespace-nowrap font-bold text-[#1B64DA] dark:text-blue-400">월 0원</strong>
-                  {subSurplus.surplusInlineText && (
-                    <>
-                      {' '}
-                      <strong className="font-mono tabular-nums font-bold text-emerald-700 dark:text-emerald-300">
-                        {subSurplus.surplusInlineText}
-                      </strong>
-                    </>
-                  )}
-                </>
-              ) : (
-                <strong className="font-mono tabular-nums whitespace-nowrap font-bold text-[#1B64DA] dark:text-blue-400">
-                  월 {subSummary.finalMonthlyFee.toLocaleString()}원
-                </strong>
-              )}
-              ) · 총{' '}
-              <strong className="font-mono tabular-nums whitespace-nowrap font-extrabold text-[#1B64DA] dark:text-blue-400">
-                -{hybridTotalDiscountAndSupport.toLocaleString()}원
-              </strong>{' '}
-              혜택
-            </p>
-          </div>
-
-          {/* 3. 히어로 통합 요약 */}
-          <div className="space-y-2">
-            <div className="rounded-2xl bg-gradient-to-br from-[#FFF1F2] via-[#FFF6F7] to-white dark:from-rose-950/55 dark:via-[#161D2F] dark:to-[#131C2E] border-2 border-[#E60012] dark:border-[#FF3B47] p-3.5 sm:p-4 shadow-[0_6px_18px_rgba(230,0,18,0.08)]">
-              <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                <span className="inline-flex items-center gap-1 text-xs font-black text-[#E60012] dark:text-[#FF6B78]">
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                  ③ 통합 최종 혜택 합계
+          {/* 통합 최종 혜택 합계 카드 (중복 브리핑 배너 제거) */}
+          <div className="rounded-2xl bg-gradient-to-br from-[#FFF1F2] via-[#FFF6F7] to-white dark:from-rose-950/55 dark:via-[#161D2F] dark:to-[#131C2E] border-2 border-[#E60012] dark:border-[#FF3B47] p-3.5 sm:p-4 shadow-[0_6px_18px_rgba(230,0,18,0.08)]">
+            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+              <span className="inline-flex items-center gap-1 text-xs font-black text-[#E60012] dark:text-[#FF6B78]">
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                일반구매 + 구독 통합 최종 체감 합계
+              </span>
+              {hybridTotalDiscountAndSupport > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-white dark:bg-slate-900 border border-[#FECDD3] dark:border-rose-700 text-[#E60012] dark:text-rose-300 text-[11px] font-extrabold font-mono tabular-nums whitespace-nowrap">
+                  통합 총 -{hybridTotalDiscountAndSupport.toLocaleString()}원 혜택
                 </span>
-                {hybridTotalDiscountAndSupport > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-white dark:bg-slate-900 border border-[#FECDD3] dark:border-rose-700 text-[#E60012] dark:text-rose-300 text-[11px] font-extrabold font-mono tabular-nums whitespace-nowrap">
-                    총 -{hybridTotalDiscountAndSupport.toLocaleString()}원 혜택
-                  </span>
-                )}
-              </div>
-              <div className="mt-1.5 text-[clamp(1.5rem,6.5vw,2rem)] font-black text-[#E60012] dark:text-[#FF5A65] font-mono tabular-nums whitespace-nowrap leading-none">
+              )}
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <div className="text-[clamp(1.5rem,6.5vw,2rem)] font-black text-[#E60012] dark:text-[#FF5A65] font-mono tabular-nums whitespace-nowrap leading-none">
                 <SpringNumberFlow value={hybridCombinedNetTotal} suffix="원" />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 mobile-keep-grid gap-2">
-              <div className="min-w-0 rounded-xl bg-[#191F28] dark:bg-slate-900 border border-transparent dark:border-slate-700 text-white px-3 py-2.5 flex flex-col justify-between overflow-hidden">
-                <span className="text-[10.5px] font-extrabold text-slate-300 break-keep">
-                  ① 일반구매 체감가
-                </span>
-                <div className="mt-1 text-[clamp(0.95rem,4vw,1.2rem)] font-black font-mono tabular-nums whitespace-nowrap">
-                  <SpringNumberFlow value={generalSummary.rawNet} suffix="원" />
-                </div>
-                <div className="text-[10px] text-slate-300 font-mono tabular-nums whitespace-nowrap truncate mt-0.5">
-                  실결제 {generalSummary.payPrice.toLocaleString()}원
-                </div>
-              </div>
-
-              <div className="min-w-0 rounded-xl bg-[#EFF6FF] dark:bg-blue-950/40 border border-[#BFDBFE] dark:border-blue-800/60 px-3 py-2.5 flex flex-col justify-between overflow-hidden">
-                <span className="text-[10.5px] font-extrabold text-[#1B64DA] dark:text-blue-300 break-keep">
-                  ② 구독 월 체감료
-                </span>
-                <div className="mt-1 text-[clamp(0.95rem,4vw,1.2rem)] font-black text-[#1B64DA] dark:text-blue-400 font-mono tabular-nums whitespace-nowrap">
-                  {subSurplus.isSurplusZone ? (
-                    '월 0원'
-                  ) : (
-                    <>
-                      월 <SpringNumberFlow value={subSummary.finalMonthlyFee} suffix="원" />
-                    </>
-                  )}
-                </div>
-                {subSurplus.surplusBadgeText ? (
-                  <div className="mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-extrabold font-mono tabular-nums break-keep leading-tight">
-                    {subSurplus.surplusBadgeText}
-                  </div>
-                ) : (
-                  <div className="text-[10px] font-semibold text-[#4E5968] dark:text-slate-300 font-mono tabular-nums whitespace-nowrap truncate mt-0.5">
-                    총 {Math.max(0, subSummary.finalTotalFee).toLocaleString()}원
-                  </div>
-                )}
-              </div>
+              <span className="text-[11px] font-bold text-[#4E5968] dark:text-slate-300 break-keep">
+                일반구매 {generalSummary.displayItems.length}품목 + 구독케어 {subSummary.displayItems.length}품목 통합 기준
+              </span>
             </div>
           </div>
 
-          {/* 4. STEP 1 / STEP 2 대칭 원장 — 폴드 펼침(680~879px) 1열 보장, 880px+ 2열 분할 */}
+          {/* 좌우 2단 분할: 좌측 일반구매 원장 / 우측 구독 무중복 블록 1·2 */}
           <div className="grid grid-cols-1 min-[880px]:grid-cols-2 gap-3.5 items-start">
-            {/* STEP 1: 일반구매 */}
+            {/* 좌측: 일반구매 원장 (기존 계산 구조 유지) */}
             <div className="rounded-2xl border border-[#E5E8EB] dark:border-slate-700/80 bg-white dark:bg-[#131C2E] overflow-hidden">
               <div className="px-3.5 py-2.5 bg-[#F8FAFC] dark:bg-slate-800/70 border-b border-[#E5E8EB] dark:border-slate-700/80 flex items-center justify-between gap-2">
                 <span className="text-xs font-extrabold text-[#191F28] dark:text-slate-100 flex items-center gap-1.5">
-                  <span className="px-1.5 py-0.5 rounded bg-[#191F28] dark:bg-slate-700 text-white text-[11px] font-extrabold whitespace-nowrap">
-                    STEP 1
-                  </span>
                   <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
                   <span>일반구매 ({generalSummary.displayItems.length}품목)</span>
                 </span>
@@ -1070,7 +1062,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
 
                 <div className="ledger-row px-3.5 py-2.5 bg-[#F8FAFC] dark:bg-slate-800/70 text-xs">
                   <span className="ledger-row-label font-black text-[#191F28] dark:text-white">
-                    ① 매장 실결제가
+                    매장 실결제가
                   </span>
                   <span className="ledger-row-value text-sm font-black text-[#191F28] dark:text-white font-mono tabular-nums whitespace-nowrap">
                     {generalSummary.payPrice.toLocaleString()}원
@@ -1091,7 +1083,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                 <div className="ledger-row px-3.5 py-3 bg-[#FFF1F2] dark:bg-rose-950/35 border-t border-[#FECDD3] dark:border-rose-800">
                   <div className="ledger-row-label space-y-0.5">
                     <div className="text-xs font-black text-[#E60012] dark:text-[#FF6B78]">
-                      일반 최종 혜택가
+                      일반구매 최종 혜택가
                     </div>
                     {generalSummary.rawNet < 0 && (
                       <div className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-600 text-white text-[11px] font-black font-mono tabular-nums">
@@ -1106,215 +1098,129 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
               </div>
             </div>
 
-            {/* STEP 2: 구독구매 */}
-            <div className="rounded-2xl border border-[#E5E8EB] dark:border-slate-700/80 bg-white dark:bg-[#131C2E] overflow-hidden">
-              <div className="px-3.5 py-2.5 bg-[#F8FAFC] dark:bg-slate-800/70 border-b border-[#E5E8EB] dark:border-slate-700/80 flex items-center justify-between gap-2">
-                <span className="text-xs font-extrabold text-[#191F28] dark:text-slate-100 flex items-center gap-1.5">
-                  <span className="px-1.5 py-0.5 rounded bg-[#1B64DA] text-white text-[11px] font-extrabold whitespace-nowrap">
-                    STEP 2
+            {/* 우측: 구독구매 파트 ([블록 1] 구독 결론 영수증 + [블록 2] 가전·케어 명세) */}
+            <div className="space-y-3">
+              <SubscriptionReceiptBlock
+                compact
+                subSummary={subSummary}
+                hiPlusSummary={hiPlusSummary}
+                hasSubPreedActive={hasSubPreedActive}
+                currentCard={currentCard}
+                currentCardTier={currentCardTier}
+                subCardBenefitLabel={subCardBenefitLabel}
+                subCashbackRows={subCashbackRows}
+              />
+
+              <div className="rounded-2xl border border-[#E5E8EB] dark:border-slate-700/80 bg-white dark:bg-[#131C2E] overflow-hidden">
+                <div className="px-3.5 py-2.5 bg-[#F8FAFC] dark:bg-slate-800/70 border-b border-[#E5E8EB] dark:border-slate-700/80 flex items-center justify-between gap-2">
+                  <span className="text-xs font-extrabold text-[#191F28] dark:text-slate-100 flex items-center gap-1.5">
+                    <RefreshCw className="w-3.5 h-3.5 text-[#1B64DA] dark:text-blue-400 shrink-0" />
+                    <span>구독 가전 · 무상 케어 명세 ({subSummary.displayItems.length}품목)</span>
                   </span>
-                  <RefreshCw className="w-3.5 h-3.5 text-[#1B64DA] dark:text-blue-400 shrink-0" />
-                  <span>구독구매 ({subSummary.displayItems.length}품목)</span>
-                </span>
-                <span className="text-[11px] font-bold text-[#8B95A1] dark:text-slate-400 font-mono tabular-nums whitespace-nowrap">
-                  월 {subSummary.totalBaseMonthly.toLocaleString()}원
-                </span>
-              </div>
-              <div className="divide-y divide-[#E5E8EB] dark:divide-slate-700/70">
-                {subSummary.displayItems.map((it: any, idx: number) => {
-                  const itemPeriod = normalizeSubscriptionPeriod(
-                    it.period,
-                    subSummary.representativePeriod
-                  );
-                  const cleanCare = sanitizeFiveYearText(
-                    it.careService || '전문가 방문케어'
-                  );
-                  const validModel = getValidDisplayModelName(it.modelName, it.monthlyFee);
-                  const itemPrincipal = getSubscriptionItemPrincipal(
-                    it,
-                    subSummary.representativePeriod
-                  );
-                  return (
-                    <div key={it.id || idx} className="ledger-row items-start px-3.5 py-2.5 text-xs">
-                      <div className="ledger-row-label space-y-0.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-extrabold text-[#191F28] dark:text-slate-100">
-                            {idx + 1}. {it.category || `구독가전 ${idx + 1}`}
+                  <span className="text-[11px] font-bold text-[#8B95A1] dark:text-slate-400 whitespace-nowrap">
+                    개별 구독료
+                  </span>
+                </div>
+                <div className="divide-y divide-[#E5E8EB] dark:divide-slate-700/70">
+                  {subSummary.displayItems.map((it: any, idx: number) => {
+                    const itemPeriod = normalizeSubscriptionPeriod(
+                      it.period,
+                      subSummary.representativePeriod
+                    );
+                    const cleanCare = sanitizeFiveYearText(
+                      it.careService || '전문가 방문케어'
+                    );
+                    const validModel = getValidDisplayModelName(it.modelName, it.monthlyFee);
+                    const itemPrincipal = getSubscriptionItemPrincipal(
+                      it,
+                      subSummary.representativePeriod
+                    );
+                    return (
+                      <div key={it.id || idx} className="ledger-row items-start px-3.5 py-2.5 text-xs">
+                        <div className="ledger-row-label space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-extrabold text-[#191F28] dark:text-slate-100">
+                              {idx + 1}. {it.category || `구독가전 ${idx + 1}`}
+                            </span>
+                            {validModel && (
+                              <span className="text-[11px] font-semibold text-[#4E5968] dark:text-slate-300 bg-[#F8FAFC] dark:bg-slate-800 border border-[#E5E8EB] dark:border-slate-700 px-1.5 py-0.5 rounded font-mono break-all">
+                                {validModel}
+                              </span>
+                            )}
+                            <span className="text-[11px] font-extrabold text-[#1B64DA] dark:text-blue-300 bg-[#EFF6FF] dark:bg-blue-950/60 border border-[#BFDBFE] dark:border-blue-800 px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap">
+                              {itemPeriod}개월 구독
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-medium text-[#8B95A1] dark:text-slate-400 break-keep">
+                            {cleanCare} · 5년 무상 A/S 기본 포함
+                          </div>
+                        </div>
+                        <div className="ledger-row-value flex flex-col items-end">
+                          <span className="font-black text-[#191F28] dark:text-white font-mono tabular-nums whitespace-nowrap">
+                            월 {(Number(it.monthlyFee) || 0).toLocaleString()}원
                           </span>
-                          {validModel && (
-                            <span className="text-[11px] font-semibold text-[#4E5968] dark:text-slate-300 bg-[#F8FAFC] dark:bg-slate-800 border border-[#E5E8EB] dark:border-slate-700 px-1.5 py-0.5 rounded font-mono break-all">
-                              {validModel}
+                          {itemPrincipal > 0 && (
+                            <span className="text-[10px] font-semibold text-[#6B7684] dark:text-slate-400 font-mono tabular-nums whitespace-nowrap mt-0.5">
+                              기준 {itemPrincipal.toLocaleString()}원
                             </span>
                           )}
-                          <span className="text-[11px] font-extrabold text-[#1B64DA] dark:text-blue-300 bg-[#EFF6FF] dark:bg-blue-950/60 border border-[#BFDBFE] dark:border-blue-800 px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap">
-                            {itemPeriod}개월 구독
-                          </span>
-                        </div>
-                        <div className="text-[11px] font-medium text-[#8B95A1] dark:text-slate-400 break-keep">
-                          {cleanCare} · 5년 무상 A/S 기본 포함
                         </div>
                       </div>
-                      <div className="ledger-row-value flex flex-col items-end">
-                        <span className="font-black text-[#191F28] dark:text-white font-mono tabular-nums whitespace-nowrap">
-                          월 {(Number(it.monthlyFee) || 0).toLocaleString()}원
-                        </span>
-                        {itemPrincipal > 0 && (
-                          <span className="text-[10px] font-semibold text-[#6B7684] dark:text-slate-400 font-mono tabular-nums whitespace-nowrap mt-0.5">
-                            기준 {itemPrincipal.toLocaleString()}원
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {subSummary.cardDiscount > 0 && currentCard && currentCardTier && (
-                  <div className="px-3.5 py-2 text-xs bg-[#F8FAFC]/60 dark:bg-slate-800/40 space-y-1.5">
-                    <div className="ledger-row">
-                      <span className="ledger-row-label font-semibold text-[#4E5968] dark:text-slate-300">
-                        (-) {currentCard.shortName} 월 {subCardBenefitLabel} ({currentCardTier.minSpendShort})
-                      </span>
-                      <span className="ledger-row-value font-extrabold text-[#1B64DA] dark:text-blue-400 font-mono tabular-nums whitespace-nowrap">
-                        월 -{subSummary.cardDiscount.toLocaleString()}원
-                      </span>
-                    </div>
-                    <CardSpendSimulationBadge
-                      compact
-                      enabled={subSummary.countPreedTowardCardSpend}
-                      payoutMethod={subSummary.hiPlusPayoutMethod}
-                      recognizedPreedSpend={subSummary.recognizedPreedSpend || 0}
-                      additionalCardSpendNeeded={subSummary.additionalCardSpendNeeded || 0}
-                      targetCardMinSpend={subSummary.targetCardMinSpend || 0}
-                    />
-                    <CardDiscountTermNotice
-                      compact
-                      cardDiscount={subSummary.cardDiscount}
-                      benefitLabel={subCardBenefitLabel}
-                      representativePeriod={subSummary.representativePeriod}
-                    />
-                  </div>
-                )}
-
-                {!simState.hideSubPreed && subSummary.hiPlusMonthly > 0 && (
-                  <div className="ledger-row px-3.5 py-2 text-xs bg-[#F8FAFC]/60 dark:bg-slate-800/40">
-                    <span className="ledger-row-label font-semibold text-[#4E5968] dark:text-slate-300">
-                      (-) 구독프리드 월 지원금
-                    </span>
-                    <span className="ledger-row-value font-extrabold text-[#1B64DA] dark:text-blue-400 font-mono tabular-nums whitespace-nowrap">
-                      월 -{subSummary.hiPlusMonthly.toLocaleString()}원
-                    </span>
-                  </div>
-                )}
-
-                <div className="px-3.5 py-3 bg-[#FFF1F2] dark:bg-rose-950/35 border-t border-[#FECDD3] dark:border-rose-800">
-                  <div className="ledger-row items-start">
-                    <div className="ledger-row-label space-y-1">
-                      {subSurplus.isSurplusZone && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-white dark:bg-slate-900 border border-[#FECDD3] dark:border-rose-700 text-[#E60012] dark:text-rose-300 text-[10px] font-extrabold">
-                          약정 기간 · 제휴카드 전월 실적 조건 적용 기준
-                        </span>
-                      )}
-                      <div className="text-xs font-black text-[#E60012] dark:text-[#FF6B78]">
-                        월 체감 구독료 ({subSummary.periodLabel})
-                      </div>
-                      {subSurplus.surplusBadgeText && (
-                        <div className="space-y-0.5">
-                          <div className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-600 text-white text-[11px] font-black font-mono tabular-nums break-keep">
-                            {subSurplus.surplusBadgeText}
-                          </div>
-                          <div className="text-[10.5px] font-bold text-emerald-800 dark:text-emerald-300 break-keep">
-                            지원 혜택이 월 구독료보다 매월 {subSurplus.monthlySurplus.toLocaleString()}원 더 많습니다
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <span className="ledger-row-value text-base font-black text-[#E60012] dark:text-[#FF5A65] font-mono tabular-nums whitespace-nowrap">
-                      {subSurplus.isSurplusZone ? (
-                        '월 0원'
-                      ) : (
-                        <>
-                          월 <SpringNumberFlow value={subSummary.finalMonthlyFee} suffix="원" />
-                        </>
-                      )}
-                    </span>
-                  </div>
-                  {hasSubPreedActive && (
-                    <HiPlusInBoxCallout
-                      compact
-                      totalAccounts={hiPlusSummary.totalAccounts}
-                      totalMonthlyDeposit={hiPlusSummary.totalMonthlyDeposit}
-                      totalMaturityRefund={hiPlusSummary.totalMaturityRefund}
-                    />
-                  )}
-                </div>
-
-                {subCashbackRows.map((row) => (
-                  <div key={row.key} className="ledger-row px-3.5 py-2 text-xs">
-                    <span className="ledger-row-label font-semibold text-[#4E5968] dark:text-slate-300">
-                      (-) {row.label}
-                    </span>
-                    <span className="ledger-row-value font-extrabold text-[#1B64DA] dark:text-blue-400 font-mono tabular-nums whitespace-nowrap">
-                      -{row.amount.toLocaleString()}원
-                    </span>
-                  </div>
-                ))}
-
-                <div className="ledger-row items-center px-3.5 py-2.5 bg-[#191F28] dark:bg-slate-900 text-white text-xs">
-                  <div className="ledger-row-label space-y-0.5">
-                    <div className="font-bold text-slate-300">
-                      {subSummary.periodLabel} 총 체감가
-                    </div>
-                    {(subSurplus.isSurplusZone || subSummary.finalTotalFee <= 0) &&
-                      subTermSurplusTotal > 0 && (
-                        <div className="text-[10.5px] font-bold text-emerald-300 font-mono tabular-nums break-keep">
-                          약정 기간 총 +{subTermSurplusTotal.toLocaleString()}원 초과 혜택 예상
-                        </div>
-                      )}
-                  </div>
-                  <span className="ledger-row-value text-sm font-black text-white font-mono tabular-nums whitespace-nowrap">
-                    {subSurplus.isSurplusZone || subSummary.finalTotalFee <= 0 ? (
-                      '0원'
-                    ) : (
-                      <SpringNumberFlow value={subSummary.finalTotalFee} suffix="원" />
-                    )}
-                  </span>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 5. STEP 3 · 혼합 프리드 결합 만기 100% 원금 환급 안심 보증 */}
-          {hasSubPreedActive ? (
-            <HiPlusInlineSummaryCard
-              hiSummary={hiPlusSummary}
-              representativePeriod={subSummary.representativePeriod}
-              payoutMethod={subSummary.hiPlusPayoutMethod}
-              onSelectPayoutMethod={handlePayoutSelect}
-              useMobileFluid
-              showGeneralLine={!simState.hideHiPreed && generalHiPreed.totalAccounts > 0}
-              generalHiPreedSummary={!simState.hideHiPreed ? generalHiPreed : null}
-            />
-          ) : !simState.hideHiPreed && generalHiPreed.totalAccounts > 0 ? (
-            <div className="rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/70 px-3.5 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="flex items-start gap-1.5 font-bold text-[#191F28] dark:text-slate-100 leading-relaxed break-keep">
-                <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[11px] font-extrabold shrink-0 mt-0.5 whitespace-nowrap">
-                  STEP 3
+          {/* [블록 3] 안심 검증 카드 — 페이지 내 유일 노출 */}
+          <div className="space-y-3">
+            {hasSubPreedActive ? (
+              <SubscriptionRefundTimelineCard
+                hiSummary={hiPlusSummary}
+                payoutMethod={subSummary.hiPlusPayoutMethod}
+                onSelectPayoutMethod={handlePayoutSelect}
+                useMobileFluid
+                showGeneralLine={!simState.hideHiPreed && generalHiPreed.totalAccounts > 0}
+                generalHiPreedSummary={!simState.hideHiPreed ? generalHiPreed : null}
+              />
+            ) : !simState.hideHiPreed && generalHiPreed.totalAccounts > 0 ? (
+              <div className="rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/70 px-3.5 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="flex items-start gap-1.5 font-bold text-[#191F28] dark:text-slate-100 leading-relaxed break-keep">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <span>
+                    일반 하이프리드 만기 100% 원금 환급 안내 (서비스 미이용 시):
+                  </span>
                 </span>
-                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                <span>
-                  일반 하이프리드 만기 100% 원금 환급 안내 (서비스 미이용 시):
+                <span className="text-[11.5px] font-extrabold text-emerald-700 dark:text-emerald-300 break-keep leading-relaxed font-mono tabular-nums whitespace-nowrap">
+                  거치 없음 · 150회 만기 {generalHiPreed.totalMaturityRefund.toLocaleString()}원 100% 환급
                 </span>
-              </span>
-              <span className="text-[11.5px] font-extrabold text-emerald-700 dark:text-emerald-300 break-keep leading-relaxed font-mono tabular-nums whitespace-nowrap">
-                거치 없음 · 150회 만기 {generalHiPreed.totalMaturityRefund.toLocaleString()}원 100% 환급
-              </span>
-            </div>
-          ) : null}
+              </div>
+            ) : null}
 
-          <PreedSafetyGuideBox
-            hasHiPlus={hasSubPreedActive}
-            hasGeneralHiPreed={!simState.hideHiPreed && generalHiPreed.totalAccounts > 0}
-          />
+            {hasSubCardActive && currentCard && currentCardTier && (
+              <SubscriptionCardSpendGaugeCard
+                cardName={currentCard.name}
+                benefitLabel={subCardBenefitLabel}
+                cardDiscount={subSummary.cardDiscount}
+                minSpendLabel={currentCardTier.minSpendLabel}
+                targetCardMinSpend={subSummary.targetCardMinSpend || 0}
+                countPreedTowardCardSpend={subSummary.countPreedTowardCardSpend}
+                hasSubPreedActive={hasSubPreedActive}
+                payoutMethod={subSummary.hiPlusPayoutMethod}
+                recognizedPreedSpend={subSummary.recognizedPreedSpend || 0}
+                additionalCardSpendNeeded={subSummary.additionalCardSpendNeeded || 0}
+                representativePeriod={subSummary.representativePeriod}
+              />
+            )}
+          </div>
+
+          {!hideInlineSafetyBox && (
+            <PreedSafetyGuideBox
+              hasHiPlus={hasSubPreedActive}
+              hasGeneralHiPreed={!simState.hideHiPreed && generalHiPreed.totalAccounts > 0}
+            />
+          )}
         </div>
       )}
     </section>
