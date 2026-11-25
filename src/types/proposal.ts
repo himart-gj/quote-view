@@ -738,6 +738,7 @@ export interface SubscriptionPhaseSegment {
   label: string;
   activeItemCount: number;
   endedItemCount: number;
+  rawBaseMonthly: number;
   baseMonthly: number;
   hiPlusMonthly: number;
   rawAfterPreed: number;
@@ -753,7 +754,8 @@ export function calculateSubscriptionPhases(
   items: SubscriptionItem[],
   fallbackPeriod: SubscriptionPeriod = 60,
   hiPlusMonthly = 0,
-  cardDiscount = 0
+  cardDiscount = 0,
+  subLotteBillingDiscount = 0
 ): SubscriptionPhaseSegment[] {
   const safeFallback: SubscriptionPeriod = normalizeSubscriptionPeriod(
     fallbackPeriod,
@@ -775,18 +777,76 @@ export function calculateSubscriptionPhases(
   const uniquePeriods = Array.from(new Set(itemPeriods)).sort((a, b) => a - b);
   const isMixed = uniquePeriods.length > 1;
 
+  const sourcePrincipals = source.map((it) =>
+    getSubscriptionItemPrincipal(it, safeFallback)
+  );
+  const totalSourcePrincipal = sourcePrincipals.reduce((s, p) => s + p, 0);
+  const safeLotteDisc = Math.max(
+    0,
+    Math.min(Math.round(subLotteBillingDiscount || 0), totalSourcePrincipal)
+  );
+
+  const itemDiscs: number[] = sourcePrincipals.map(() => 0);
+  if (isMixed && safeLotteDisc > 0 && totalSourcePrincipal > 0) {
+    let allocated = 0;
+    let lastPositiveIdx = -1;
+    sourcePrincipals.forEach((p, idx) => {
+      if (p > 0) lastPositiveIdx = idx;
+    });
+    sourcePrincipals.forEach((p, idx) => {
+      if (p <= 0) return;
+      if (idx === lastPositiveIdx) {
+        itemDiscs[idx] = Math.max(0, safeLotteDisc - allocated);
+      } else {
+        const share = Math.floor((safeLotteDisc * p) / totalSourcePrincipal);
+        itemDiscs[idx] = share;
+        allocated += share;
+      }
+    });
+  }
+
+  const itemBilledMonthly = source.map((it, idx) => {
+    const rawM = Math.max(0, Number(it.monthlyFee) || 0);
+    if (!isMixed || safeLotteDisc <= 0 || totalSourcePrincipal <= 0) {
+      return rawM;
+    }
+    const itemP = sourcePrincipals[idx];
+    const itemPeriod = normalizeSubscriptionPeriod(it.period, safeFallback);
+    const itemDisc = itemDiscs[idx] || 0;
+    return itemPeriod > 0
+      ? Math.round(Math.max(0, itemP - itemDisc) / itemPeriod)
+      : rawM;
+  });
+
   let prevEnd = 0;
   return uniquePeriods.map((endMonth) => {
     const startMonth = prevEnd + 1;
     const months = Math.max(1, endMonth - prevEnd);
-    const activeItems = source.filter(
-      (it) => normalizeSubscriptionPeriod(it.period, safeFallback) >= endMonth
-    );
-    const endedItemCount = Math.max(0, source.length - activeItems.length);
-    const baseMonthly = activeItems.reduce(
-      (sum, it) => sum + Math.max(0, Number(it.monthlyFee) || 0),
+    const activeIndices: number[] = [];
+    source.forEach((it, idx) => {
+      if (normalizeSubscriptionPeriod(it.period, safeFallback) >= endMonth) {
+        activeIndices.push(idx);
+      }
+    });
+    const endedItemCount = Math.max(0, source.length - activeIndices.length);
+    const rawBaseMonthly = activeIndices.reduce(
+      (sum, idx) => sum + Math.max(0, Number(source[idx].monthlyFee) || 0),
       0
     );
+    const baseMonthly =
+      safeLotteDisc <= 0 || totalSourcePrincipal <= 0
+        ? rawBaseMonthly
+        : !isMixed
+        ? endMonth > 0
+          ? Math.round(
+              Math.max(0, totalSourcePrincipal - safeLotteDisc) / endMonth
+            )
+          : rawBaseMonthly
+        : activeIndices.reduce(
+            (sum, idx) => sum + (itemBilledMonthly[idx] || 0),
+            0
+          );
+
     const rawAfterPreed = baseMonthly - hiPlusMonthly;
     const effectiveAfterPreed = Math.max(0, rawAfterPreed);
     const surplusAfterPreed = Math.max(0, -rawAfterPreed);
@@ -803,8 +863,9 @@ export function calculateSubscriptionPhases(
       endMonth,
       months,
       label: isMixed ? `${startMonth}~${endMonth}개월차` : `${endMonth}개월`,
-      activeItemCount: activeItems.length,
+      activeItemCount: activeIndices.length,
       endedItemCount,
+      rawBaseMonthly,
       baseMonthly,
       hiPlusMonthly,
       rawAfterPreed,
@@ -906,7 +967,7 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
     })
     .filter(Boolean);
 
-  const totalBaseMonthly = periodInfo.totalBaseMonthly;
+  const rawTotalBaseMonthly = periodInfo.totalBaseMonthly;
   const totalPrincipal = periodInfo.totalPrincipal;
 
   const currentCard = AFFILIATE_CARDS.find(
@@ -956,6 +1017,30 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
     planData.selectedCardId,
     subLotteBilling5p
   );
+  const billedPrincipal = Math.max(0, totalPrincipal - subLotteBillingDiscount);
+
+  const phaseSegments = calculateSubscriptionPhases(
+    items,
+    fallbackPeriod,
+    hiPlusMonthly,
+    cardDiscount,
+    subLotteBillingDiscount
+  );
+
+  const billedBaseMonthly =
+    subLotteBillingDiscount > 0
+      ? isMixedPeriod
+        ? phaseSegments[0]?.baseMonthly ?? rawTotalBaseMonthly
+        : representativePeriod > 0
+        ? Math.round(billedPrincipal / representativePeriod)
+        : rawTotalBaseMonthly
+      : rawTotalBaseMonthly;
+
+  const totalBaseMonthly = billedBaseMonthly;
+  const subLotteMonthlyDiscount = Math.max(
+    0,
+    rawTotalBaseMonthly - billedBaseMonthly
+  );
 
   const monthlyCashbackEquiv = 0;
 
@@ -968,17 +1053,10 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
 
   const finalMonthlyFee = monthlyBillingAfterCardAndHiPlus;
 
-  const phaseSegments = calculateSubscriptionPhases(
-    items,
-    fallbackPeriod,
-    hiPlusMonthly,
-    cardDiscount
-  );
-
   const totalMonthlyDiscountOverTerm =
     (cardDiscount + hiPlusMonthly) * representativePeriod;
   const totalTermBillingBeforeCashback =
-    totalPrincipal - totalMonthlyDiscountOverTerm;
+    billedPrincipal - totalMonthlyDiscountOverTerm;
 
   const totalSubBenefit =
     totalMonthlyDiscountOverTerm + totalSubCashback + subLotteBillingDiscount;
@@ -995,7 +1073,7 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
         );
 
   const hasSubData =
-    totalBaseMonthly > 0 ||
+    rawTotalBaseMonthly > 0 ||
     totalPrincipal > 0 ||
     items.some(
       (it) =>
@@ -1010,9 +1088,13 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
     periodLabel,
     isMixedPeriod,
     subscriptionPeriod: representativePeriod,
+    rawTotalBaseMonthly,
+    billedBaseMonthly,
     totalBaseMonthly,
     totalMonthlyFee: totalBaseMonthly,
     totalPrincipal,
+    billedPrincipal,
+    subLotteMonthlyDiscount,
     currentCard,
     currentCardTier,
     cardDiscount,

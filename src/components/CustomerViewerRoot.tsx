@@ -412,6 +412,10 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
         selectedCardId: cardId,
         selectedCardTierId: preferredTier,
         subAutoTierCashback: true,
+        subLotteBilling5p:
+          originPlanData.selectedCardId === cardId
+            ? Boolean(originPlanData.subLotteBilling5p)
+            : Boolean(prev.subLotteBilling5p),
       };
     });
   };

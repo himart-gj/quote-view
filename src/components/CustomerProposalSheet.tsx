@@ -80,6 +80,20 @@ const SubscriptionReceiptBlock: React.FC<SubscriptionReceiptBlockProps> = ({
       ? finalSurplus.monthlySurplus * subSummary.representativePeriod
       : 0;
 
+  const lotteBillingDiscount = Math.max(
+    0,
+    Number(subSummary.subLotteBillingDiscount) || 0
+  );
+  const hasLotteBillingDiscount = lotteBillingDiscount > 0;
+  const rawTotalBaseMonthly =
+    typeof subSummary.rawTotalBaseMonthly === 'number'
+      ? subSummary.rawTotalBaseMonthly
+      : Number(subSummary.totalBaseMonthly) || 0;
+  const billedPrincipal =
+    typeof subSummary.billedPrincipal === 'number'
+      ? subSummary.billedPrincipal
+      : Math.max(0, (Number(subSummary.totalPrincipal) || 0) - lotteBillingDiscount);
+
   return (
     <div className="rounded-2xl border border-[#D1D6DB] dark:border-slate-700/80 overflow-hidden bg-white dark:bg-[#131C2E] shadow-[0_2px_10px_rgba(25,31,40,0.04)]">
       {!compact && (
@@ -104,22 +118,56 @@ const SubscriptionReceiptBlock: React.FC<SubscriptionReceiptBlockProps> = ({
 
       <div className={`${compact ? 'p-3 space-y-2.5' : 'p-3.5 sm:p-4 space-y-3'}`}>
         {/* 기준선: 가전 원 구독료 합계 */}
-        <div className="ledger-row items-baseline pb-2.5 border-b border-[#E5E8EB] dark:border-slate-700/80">
-          <div className="ledger-row-label space-y-0.5">
-            <div className="text-xs sm:text-[13px] font-extrabold text-[#191F28] dark:text-slate-100 break-keep">
-              가전 원 구독료 합계 ({subSummary.displayItems.length}품목)
+        <div className="ledger-row items-start pb-2.5 border-b border-[#E5E8EB] dark:border-slate-700/80">
+          <div className="ledger-row-label space-y-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs sm:text-[13px] font-extrabold text-[#191F28] dark:text-slate-100 break-keep">
+                가전 원 구독료 합계 ({subSummary.displayItems.length}품목)
+              </span>
+              {hasLotteBillingDiscount && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-[#EFF6FF] dark:bg-blue-950/60 border border-[#BFDBFE] dark:border-blue-800 text-[#1B64DA] dark:text-blue-300 text-[10px] sm:text-[10.5px] font-extrabold break-keep">
+                  롯데카드 5%(최대 5만원) 청구할인 적용 금액
+                </span>
+              )}
             </div>
-            <div className="text-[10.5px] font-semibold text-[#8B95A1] dark:text-slate-400 font-mono tabular-nums break-keep">
-              약정 원금 {subSummary.totalPrincipal.toLocaleString()}원
-              {isMixed &&
-                ` · ${phaseSegments
-                  .map((s) => `${s.label} 월 ${s.baseMonthly.toLocaleString()}원`)
-                  .join(' / ')}`}
-            </div>
+            {hasLotteBillingDiscount ? (
+              <div className="text-[10.5px] font-semibold text-[#4E5968] dark:text-slate-300 font-mono tabular-nums break-keep leading-snug">
+                할인 전 약정 원금 {subSummary.totalPrincipal.toLocaleString()}원 →{' '}
+                <strong className="font-extrabold text-[#1B64DA] dark:text-blue-300">
+                  실청구 원금 {billedPrincipal.toLocaleString()}원
+                </strong>{' '}
+                (-{lotteBillingDiscount.toLocaleString()}원 카드사 청구할인)
+                {isMixed &&
+                  ` · ${phaseSegments
+                    .map((s) => `${s.label} 월 ${s.baseMonthly.toLocaleString()}원`)
+                    .join(' / ')}`}
+              </div>
+            ) : (
+              <div className="text-[10.5px] font-semibold text-[#8B95A1] dark:text-slate-400 font-mono tabular-nums break-keep">
+                약정 원금 {subSummary.totalPrincipal.toLocaleString()}원
+                {isMixed &&
+                  ` · ${phaseSegments
+                    .map((s) => `${s.label} 월 ${s.baseMonthly.toLocaleString()}원`)
+                    .join(' / ')}`}
+              </div>
+            )}
           </div>
-          <span className="ledger-row-value text-sm sm:text-base font-black text-[#191F28] dark:text-white font-mono tabular-nums whitespace-nowrap">
-            월 {subSummary.totalBaseMonthly.toLocaleString()}원
-          </span>
+          {hasLotteBillingDiscount ? (
+            <div className="ledger-row-value flex flex-col items-end text-right shrink-0">
+              {rawTotalBaseMonthly > subSummary.totalBaseMonthly && (
+                <span className="text-[10.5px] font-semibold text-[#8B95A1] dark:text-slate-400 line-through font-mono tabular-nums whitespace-nowrap">
+                  할인 전 월 {rawTotalBaseMonthly.toLocaleString()}원
+                </span>
+              )}
+              <span className="text-sm sm:text-base font-black text-[#1B64DA] dark:text-blue-300 font-mono tabular-nums whitespace-nowrap">
+                월 {subSummary.totalBaseMonthly.toLocaleString()}원
+              </span>
+            </div>
+          ) : (
+            <span className="ledger-row-value text-sm sm:text-base font-black text-[#191F28] dark:text-white font-mono tabular-nums whitespace-nowrap">
+              월 {subSummary.totalBaseMonthly.toLocaleString()}원
+            </span>
+          )}
         </div>
 
         {/* 1단계: Hi구독 플러스 현금지원 차감 (활성 시에만 표시) */}
@@ -142,16 +190,20 @@ const SubscriptionReceiptBlock: React.FC<SubscriptionReceiptBlockProps> = ({
               </span>
             </div>
 
-            {/* 2단 수식일 때만 중간 결론('카드 조건 없이도 기본 월 체감가') 노출 */}
+            {/* 2단 수식일 때만 중간 결론 노출 */}
             {isTwoStep && (
               <div className="rounded-xl bg-[#F8FAFC] dark:bg-slate-800/80 border border-[#D1D6DB] dark:border-slate-700 p-3 space-y-2">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <div className="space-y-0.5">
                     <span className="text-xs sm:text-[13px] font-black text-[#191F28] dark:text-white break-keep">
-                      카드 조건 없이도 기본 월 체감가
+                      {hasLotteBillingDiscount
+                        ? '전월 실적 조건 없이도 기본 월 체감가'
+                        : '카드 조건 없이도 기본 월 체감가'}
                     </span>
                     <div className="text-[10.5px] font-semibold text-[#6B7684] dark:text-slate-400">
-                      제휴카드 미사용 · 실적 부담 없는 기본 혜택가
+                      {hasLotteBillingDiscount
+                        ? '카드 월 실적 미충족 시에도 적용되는 기본 혜택가'
+                        : '제휴카드 미사용 · 실적 부담 없는 기본 혜택가'}
                     </div>
                   </div>
                   <div className="text-right">
@@ -228,9 +280,13 @@ const SubscriptionReceiptBlock: React.FC<SubscriptionReceiptBlockProps> = ({
                 {isTwoStep
                   ? '제휴카드 추가 적용 시 최종 월 체감가'
                   : hasPreedBenefit
-                  ? '카드 조건 없이 최종 월 체감가'
+                  ? hasLotteBillingDiscount
+                    ? '5% 청구할인 · 기본 지원 반영 최종 월 체감가'
+                    : '카드 조건 없이 최종 월 체감가'
                   : hasCardBenefit
                   ? '제휴카드 적용 최종 월 체감가'
+                  : hasLotteBillingDiscount
+                  ? '롯데카드 5%(최대 5만원) 청구할인 적용 월 구독료'
                   : '월 구독료 합계'}
               </div>
               <div className="text-[10.5px] font-semibold text-[#4E5968] dark:text-slate-300 break-keep">
@@ -322,14 +378,14 @@ const SubscriptionReceiptBlock: React.FC<SubscriptionReceiptBlockProps> = ({
           )}
         </div>
 
-        {/* 1회성 금액대·추가 캐시백 · 청구할인 보너스 (활성 시에만 표시) */}
+        {/* 1회성 금액대·추가 캐시백 보너스 (활성 시에만 표시) */}
         {subCashbackRows.length > 0 && (
           <div className="rounded-xl bg-[#EFF6FF] dark:bg-blue-950/40 border border-[#BFDBFE] dark:border-blue-800/70 px-3 py-2 space-y-1.5">
             {subCashbackRows.map((row) => (
               <div key={row.key} className="ledger-row items-center text-xs">
                 <div className="ledger-row-label flex items-center gap-1.5">
                   <span className="px-1.5 py-0.5 rounded bg-[#1B64DA] text-white text-[10px] font-extrabold shrink-0">
-                    {row.key === 'sub-lotte-5p' ? '청구할인' : '보너스 환급'}
+                    보너스 환급
                   </span>
                   <span className="font-bold text-[#191F28] dark:text-slate-100 break-keep">
                     {row.label}
@@ -453,15 +509,6 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
   ];
 
   const subCashbackRows: { key: string; label: string; amount: number }[] = [
-    ...(subSummary.subLotteBillingDiscount > 0
-      ? [
-          {
-            key: 'sub-lotte-5p',
-            label: '롯데 제휴카드 5% 청구할인 (최대 5만원 한도)',
-            amount: subSummary.subLotteBillingDiscount,
-          },
-        ]
-      : []),
     ...(subSummary.subTierCashback > 0
       ? [
           {
@@ -853,7 +900,9 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                 </span>
               </div>
               <span className="text-[11px] font-bold text-[#8B95A1] dark:text-slate-400 shrink-0 whitespace-nowrap">
-                개별 구독료 · 약정 기준가
+                {subSummary.subLotteBillingDiscount > 0
+                  ? '청구할인 전 개별 약정 기준가'
+                  : '개별 구독료 · 약정 기준가'}
               </span>
             </div>
             <div className="divide-y divide-[#E5E8EB] dark:divide-slate-700/70">
@@ -1127,7 +1176,9 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                     <span>구독 가전 · 무상 케어 명세 ({subSummary.displayItems.length}품목)</span>
                   </span>
                   <span className="text-[11px] font-bold text-[#8B95A1] dark:text-slate-400 whitespace-nowrap">
-                    개별 구독료
+                    {subSummary.subLotteBillingDiscount > 0
+                      ? '할인 전 기준가'
+                      : '개별 구독료'}
                   </span>
                 </div>
                 <div className="divide-y divide-[#E5E8EB] dark:divide-slate-700/70">
