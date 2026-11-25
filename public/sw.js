@@ -1,5 +1,5 @@
-const CACHE_NAME = 'quote-view-shell-v35';
-const DATA_CACHE_NAME = 'quote-view-data-v35';
+const CACHE_NAME = 'quote-view-shell-v36';
+const DATA_CACHE_NAME = 'quote-view-data-v36';
 const APP_SHELL = ['./', './index.html'];
 
 self.addEventListener('install', (event) => {

@@ -142,6 +142,8 @@ function unpackPlanTuple(rawPlan: any, prefix: string): GeneralPlanData {
       : typeof arr[12] === 'string' && arr[12]
       ? arr[12]
       : SUB_CARE_OPTIONS[0];
+  const resolvedPlanWarranty =
+    typeof arr[21] === 'string' && arr[21] ? arr[21] : DEFAULT_WARRANTY;
 
   const items =
     rawSub.length > 0
@@ -151,13 +153,22 @@ function unpackPlanTuple(rawPlan: any, prefix: string): GeneralPlanData {
             60
           );
           const contractAmt = unpackMoney(s?.[4]);
+          const itemCare =
+            typeof s?.[5] === 'number' && s[5] >= 1 && SUB_CARE_OPTIONS[s[5] - 1]
+              ? SUB_CARE_OPTIONS[s[5] - 1]
+              : typeof s?.[5] === 'string' && s[5]
+              ? s[5]
+              : careService;
+          const itemWarranty =
+            typeof s?.[6] === 'string' && s[6] ? s[6] : resolvedPlanWarranty;
           return {
             id: `${prefix}-s-${idx + 1}`,
             category: unpackCat(s?.[0]),
             modelName: String(s?.[1] || ''),
             monthlyFee: unpackMoney(s?.[2]),
             period: itemPeriod,
-            careService,
+            careService: itemCare,
+            warrantyType: itemWarranty,
             ...(contractAmt > 0 ? { contractAmount: contractAmt } : {}),
           };
         })
@@ -169,6 +180,7 @@ function unpackPlanTuple(rawPlan: any, prefix: string): GeneralPlanData {
             monthlyFee: 0,
             period: subPeriod,
             careService,
+            warrantyType: resolvedPlanWarranty,
           },
         ];
 
