@@ -322,14 +322,14 @@ const SubscriptionReceiptBlock: React.FC<SubscriptionReceiptBlockProps> = ({
           )}
         </div>
 
-        {/* 1회성 금액대·추가 캐시백 보너스 (활성 시에만 표시) */}
+        {/* 1회성 금액대·추가 캐시백 · 청구할인 보너스 (활성 시에만 표시) */}
         {subCashbackRows.length > 0 && (
           <div className="rounded-xl bg-[#EFF6FF] dark:bg-blue-950/40 border border-[#BFDBFE] dark:border-blue-800/70 px-3 py-2 space-y-1.5">
             {subCashbackRows.map((row) => (
               <div key={row.key} className="ledger-row items-center text-xs">
                 <div className="ledger-row-label flex items-center gap-1.5">
                   <span className="px-1.5 py-0.5 rounded bg-[#1B64DA] text-white text-[10px] font-extrabold shrink-0">
-                    보너스 환급
+                    {row.key === 'sub-lotte-5p' ? '청구할인' : '보너스 환급'}
                   </span>
                   <span className="font-bold text-[#191F28] dark:text-slate-100 break-keep">
                     {row.label}
@@ -453,6 +453,15 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
   ];
 
   const subCashbackRows: { key: string; label: string; amount: number }[] = [
+    ...(subSummary.subLotteBillingDiscount > 0
+      ? [
+          {
+            key: 'sub-lotte-5p',
+            label: '롯데 제휴카드 5% 청구할인 (최대 5만원 한도)',
+            amount: subSummary.subLotteBillingDiscount,
+          },
+        ]
+      : []),
     ...(subSummary.subTierCashback > 0
       ? [
           {

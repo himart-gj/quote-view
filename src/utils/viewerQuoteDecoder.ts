@@ -243,6 +243,7 @@ function unpackPlanTuple(rawPlan: any, prefix: string): GeneralPlanData {
     subAutoTierCashback: arr[18] === 0 ? false : true,
     subManualTierCashback: unpackMoney(arr[19]),
     subExtraCashback: unpackMoney(arr[20]),
+    subLotteBilling5p: Boolean(arr[25]),
   };
 }
 

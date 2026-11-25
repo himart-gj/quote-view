@@ -447,7 +447,9 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
     isSameGenPreedAsOrigin &&
     (!showSub ||
       (simState.selectedCardId === originCleanPlan.selectedCardId &&
-        simState.selectedCardTierId === originCleanPlan.selectedCardTierId)) &&
+        simState.selectedCardTierId === originCleanPlan.selectedCardTierId &&
+        Boolean(simState.subLotteBilling5p) ===
+          Boolean(originCleanPlan.subLotteBilling5p))) &&
     (!showGeneral || simState.generalCardType === originCleanPlan.generalCardType);
 
   const isNoCardPresetActive =
