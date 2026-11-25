@@ -837,7 +837,7 @@ export const UnifiedComplianceAccordion: React.FC<
   const preedRows = getPreedComplianceRows({ hasHiPlus, hasGeneralHiPreed });
 
   return (
-    <div className="no-print rounded-2xl bg-white dark:bg-[#131C2E] border border-[#E5E8EB] dark:border-slate-700/80 overflow-hidden">
+    <div className="rounded-2xl bg-white dark:bg-[#131C2E] border border-[#E5E8EB] dark:border-slate-700/80 overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
@@ -854,51 +854,53 @@ export const UnifiedComplianceAccordion: React.FC<
             </span>
           </div>
           {preedRows.length > 0 && !open && (
-            <p className="text-[10.5px] font-medium text-[#8B95A1] dark:text-slate-400 mt-0.5 pl-5.5 break-keep">
+            <p className="no-print text-[10.5px] font-medium text-[#8B95A1] dark:text-slate-400 mt-0.5 pl-5.5 break-keep">
               할부거래법 14일 청약철회 · 제1금융권 50% 지급보증 · 중도해지 기준 확인
             </p>
           )}
         </div>
-        <span className="text-[#4E5968] dark:text-slate-300 shrink-0">
+        <span className="no-print text-[#4E5968] dark:text-slate-300 shrink-0">
           {open ? chevronUpIcon : chevronDownIcon}
         </span>
       </button>
 
-      {open && (
-        <div className="px-4 pb-3.5 text-xs text-[#4E5968] dark:text-slate-300 space-y-2.5 leading-relaxed break-keep border-t border-[#E5E8EB] dark:border-slate-700/80 pt-3">
-          <p className="text-[11px] text-[#6B7684] dark:text-slate-400">
-            • 본 제안서의 캐시백 및 제휴카드 월 캐시백/청구할인은 카드사 전월 실적 조건 충족 및 당월 행사 기준이며 결제일에 따라 일부 변동될 수 있습니다.
-          </p>
+      <div
+        className={`${
+          open ? 'block' : 'hidden print:block'
+        } px-4 pb-3.5 text-xs text-[#4E5968] dark:text-slate-300 space-y-2.5 leading-relaxed break-keep border-t border-[#E5E8EB] dark:border-slate-700/80 pt-3`}
+      >
+        <p className="text-[11px] text-[#6B7684] dark:text-slate-400">
+          • 본 제안서의 캐시백 및 제휴카드 월 캐시백/청구할인은 카드사 전월 실적 조건 충족 및 당월 행사 기준이며 결제일에 따라 일부 변동될 수 있습니다.
+        </p>
 
-          {preedRows.length > 0 && (
-            <div className="rounded-xl bg-[#F8FAFC] dark:bg-slate-800/60 border border-[#E5E8EB] dark:border-slate-700 p-3 space-y-1.5">
-              <div className="text-[11px] font-extrabold text-[#191F28] dark:text-slate-100 pb-1 border-b border-[#E5E8EB] dark:border-slate-700 flex items-center justify-between gap-2">
-                <span>웅진프리드라이프 제휴 결합 필수 고지</span>
-                <span className="text-[10px] font-semibold text-[#8B95A1] dark:text-slate-400">
-                  가입 전 필수 확인
+        {preedRows.length > 0 && (
+          <div className="rounded-xl bg-[#F8FAFC] dark:bg-slate-800/60 border border-[#E5E8EB] dark:border-slate-700 p-3 space-y-1.5">
+            <div className="text-[11px] font-extrabold text-[#191F28] dark:text-slate-100 pb-1 border-b border-[#E5E8EB] dark:border-slate-700 flex items-center justify-between gap-2">
+              <span>웅진프리드라이프 제휴 결합 필수 고지</span>
+              <span className="text-[10px] font-semibold text-[#8B95A1] dark:text-slate-400">
+                가입 전 필수 확인
+              </span>
+            </div>
+            {preedRows.map((row) => (
+              <div
+                key={row.label}
+                className="flex items-start gap-2 text-[10.5px] leading-snug break-keep"
+              >
+                <span className="px-1.5 py-0.5 rounded bg-[#191F28] dark:bg-slate-700 text-white text-[9.5px] font-extrabold shrink-0 min-w-[50px] text-center">
+                  {row.label}
+                </span>
+                <span className="text-[#4E5968] dark:text-slate-300 font-medium flex-1">
+                  {row.text}
                 </span>
               </div>
-              {preedRows.map((row) => (
-                <div
-                  key={row.label}
-                  className="flex items-start gap-2 text-[10.5px] leading-snug break-keep"
-                >
-                  <span className="px-1.5 py-0.5 rounded bg-[#191F28] dark:bg-slate-700 text-white text-[9.5px] font-extrabold shrink-0 min-w-[50px] text-center">
-                    {row.label}
-                  </span>
-                  <span className="text-[#4E5968] dark:text-slate-300 font-medium flex-1">
-                    {row.text}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+            ))}
+          </div>
+        )}
 
-          <p className="text-[11px] text-[#6B7684] dark:text-slate-400">
-            • 재고 확인 및 배송일 지정은 아래 담당 컨설턴트에게 문의해 주시면 신속히 안내해 드립니다.
-          </p>
-        </div>
-      )}
+        <p className="no-print text-[11px] text-[#6B7684] dark:text-slate-400">
+          • 재고 확인 및 배송일 지정은 아래 담당 컨설턴트에게 문의해 주시면 신속히 안내해 드립니다.
+        </p>
+      </div>
     </div>
   );
 };

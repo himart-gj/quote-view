@@ -7,8 +7,8 @@ export function normalizeSubscriptionPeriod(
   fallback: SubscriptionPeriod = 60
 ): SubscriptionPeriod {
   const num = Number(raw);
-  if (num === 36 || num === 48 || num === 60) return num;
-  return fallback === 36 || fallback === 48 || fallback === 60 ? fallback : 60;
+  if (num === 36 || num === 60) return num;
+  return fallback === 36 || fallback === 60 ? fallback : 60;
 }
 
 // ==================== 일반구매(일시불) 타입 ====================
@@ -437,46 +437,298 @@ export function cloneGeneralPlanData(
   };
 }
 
-export function switchGeneralPlanInState(
-  prev: ProposalState,
-  targetPlan: 1 | 2
-): ProposalState {
-  if (prev.activeGeneralPlan === targetPlan) return prev;
+export const MAX_QUOTE_PLANS = 6;
 
-  const currentSnapshot = extractGeneralPlanData(prev);
-  if (targetPlan === 2) {
-    const nextActive = extractGeneralPlanData(prev.generalPlan2);
-    return {
-      ...prev,
-      activeGeneralPlan: 2,
-      generalPlan1: currentSnapshot,
-      ...nextActive,
-    };
-  } else {
-    const nextActive = extractGeneralPlanData(prev.generalPlan1);
-    return {
-      ...prev,
-      activeGeneralPlan: 1,
-      generalPlan2: currentSnapshot,
-      ...nextActive,
-    };
+export function hasPlanMeaningfulContent(
+  plan?: Partial<GeneralPlanData> | null
+): boolean {
+  if (!plan) return false;
+  const hasGen = (plan.generalItems || []).some(
+    (it) =>
+      (it.category || '').trim() !== '' ||
+      (it.modelName || '').trim() !== '' ||
+      (Number(it.unitPrice) || 0) > 0
+  );
+  if (hasGen) return true;
+  const hasSub = (plan.items || []).some(
+    (it) =>
+      (it.category || '').trim() !== '' ||
+      (it.modelName || '').trim() !== '' ||
+      (Number(it.monthlyFee) || 0) > 0 ||
+      (Number(it.contractAmount) || 0) > 0
+  );
+  if (hasSub) return true;
+  if (
+    (Number(plan.instantDiscount) || 0) > 0 ||
+    (Number(plan.extraCashback) || 0) > 0 ||
+    (Number(plan.subExtraCashback) || 0) > 0 ||
+    Boolean(plan.subLotteBilling5p)
+  ) {
+    return true;
   }
+  const genFreed =
+    (plan.generalHiPreedCounts?.hf75 || 0) +
+    (plan.generalHiPreedCounts?.hf150 || 0) +
+    (plan.generalHiPreedCounts?.hf225 || 0) +
+    (plan.generalHiPreedCounts?.hf300 || 0);
+  const subFreed =
+    (plan.hiPlusCounts?.hi72 || 0) +
+    (plan.hiPlusCounts?.hi90 || 0) +
+    (plan.hiPlusCounts?.hi108 || 0);
+  return genFreed + subFreed > 0;
 }
 
-export function copyPlan1ToPlan2InState(prev: ProposalState): ProposalState {
-  const plan1Source =
-    prev.activeGeneralPlan === 1
-      ? extractGeneralPlanData(prev)
-      : extractGeneralPlanData(prev.generalPlan1);
+export function resolveGeneralPlansFromState(
+  state: ProposalState
+): GeneralPlanData[] {
+  const mode: QuoteMode = state.quoteMode || 'general';
+  const liveSnapshot = extractGeneralPlanData(state);
+  const rawActive = Math.max(
+    1,
+    Math.floor(Number(state.activeGeneralPlan) || 1)
+  );
 
-  const clonedForPlan2 = cloneGeneralPlanData(plan1Source, 'plan2');
+  if (Array.isArray(state.generalPlans) && state.generalPlans.length > 0) {
+    const plans = state.generalPlans
+      .slice(0, MAX_QUOTE_PLANS)
+      .map((p) => extractGeneralPlanData(p));
+    const clampedIdx = Math.min(plans.length, rawActive) - 1;
+    plans[clampedIdx] = liveSnapshot;
+    return plans;
+  }
+
+  // 하위 호환: generalPlans가 없는 기존 저장 데이터 복원
+  const p1 =
+    rawActive === 1
+      ? liveSnapshot
+      : extractGeneralPlanData(state.generalPlan1 || state);
+  const rawP2 =
+    rawActive === 2
+      ? liveSnapshot
+      : state.generalPlan2
+      ? extractGeneralPlanData(state.generalPlan2)
+      : null;
+
+  if (rawActive === 2 || (rawP2 && hasPlanMeaningfulContent(rawP2))) {
+    return [p1, rawP2 || createEmptyGeneralPlanData(mode, 2)];
+  }
+  return [p1];
+}
+
+export function syncActivePlanIntoGeneralPlans(
+  state: ProposalState
+): ProposalState {
+  const mode: QuoteMode = state.quoteMode || 'general';
+  const nextPlans = resolveGeneralPlansFromState(state);
+  const clampedActive = Math.min(
+    nextPlans.length,
+    Math.max(1, Math.floor(Number(state.activeGeneralPlan) || 1))
+  );
+  const activeData = nextPlans[clampedActive - 1];
+  const fallbackPlan2: GeneralPlanData = {
+    ...createEmptyGeneralPlanData(mode, 2),
+    hideHiPreed: Boolean(activeData.hideHiPreed),
+    hideSubPreed: Boolean(activeData.hideSubPreed),
+  };
+
+  return {
+    ...state,
+    ...activeData,
+    activeGeneralPlan: clampedActive,
+    generalPlans: nextPlans,
+    generalPlan1: nextPlans[0],
+    generalPlan2: nextPlans[1] ?? fallbackPlan2,
+  };
+}
+
+export function applyAllGeneralPlansPatch(
+  prev: ProposalState,
+  patchFn: (plan: GeneralPlanData, idx: number) => GeneralPlanData
+): ProposalState {
+  const mode: QuoteMode = prev.quoteMode || 'general';
+  const currentPlans = resolveGeneralPlansFromState(prev);
+  const nextPlans = currentPlans.map((p, idx) =>
+    extractGeneralPlanData(patchFn(p, idx))
+  );
+  const clampedActive = Math.min(
+    nextPlans.length,
+    Math.max(1, Math.floor(Number(prev.activeGeneralPlan) || 1))
+  );
+  const activeData = nextPlans[clampedActive - 1];
+  const fallbackPlan2: GeneralPlanData = patchFn(
+    createEmptyGeneralPlanData(mode, 2),
+    1
+  );
 
   return {
     ...prev,
-    activeGeneralPlan: 2,
-    generalPlan1: plan1Source,
-    generalPlan2: extractGeneralPlanData(clonedForPlan2),
-    ...clonedForPlan2,
+    ...activeData,
+    activeGeneralPlan: clampedActive,
+    generalPlans: nextPlans,
+    generalPlan1: nextPlans[0],
+    generalPlan2: nextPlans[1] ?? extractGeneralPlanData(fallbackPlan2),
+  };
+}
+
+export function switchGeneralPlanInState(
+  prev: ProposalState,
+  targetPlan: number
+): ProposalState {
+  const plans = resolveGeneralPlansFromState(prev);
+  const target = Math.floor(Number(targetPlan) || 1);
+  if (target < 1 || target > plans.length) return prev;
+  if (prev.activeGeneralPlan === target && Array.isArray(prev.generalPlans)) {
+    return prev;
+  }
+
+  const nextActive = extractGeneralPlanData(plans[target - 1]);
+  const fallbackPlan2: GeneralPlanData = {
+    ...createEmptyGeneralPlanData(prev.quoteMode || 'general', 2),
+    hideHiPreed: Boolean(nextActive.hideHiPreed),
+    hideSubPreed: Boolean(nextActive.hideSubPreed),
+  };
+
+  return {
+    ...prev,
+    ...nextActive,
+    activeGeneralPlan: target,
+    generalPlans: plans,
+    generalPlan1: plans[0],
+    generalPlan2: plans[1] ?? fallbackPlan2,
+  };
+}
+
+export function addEmptyGeneralPlanInState(prev: ProposalState): ProposalState {
+  const mode: QuoteMode = prev.quoteMode || 'general';
+  const plans = resolveGeneralPlansFromState(prev);
+  if (plans.length >= MAX_QUOTE_PLANS) return prev;
+
+  const newPlanNum = plans.length + 1;
+  const freshPlan: GeneralPlanData = {
+    ...createEmptyGeneralPlanData(mode, newPlanNum),
+    hideHiPreed: Boolean(prev.hideHiPreed),
+    hideSubPreed: Boolean(prev.hideSubPreed),
+  };
+  const nextPlans = [...plans, freshPlan];
+  const fallbackPlan2: GeneralPlanData = {
+    ...createEmptyGeneralPlanData(mode, 2),
+    hideHiPreed: Boolean(freshPlan.hideHiPreed),
+    hideSubPreed: Boolean(freshPlan.hideSubPreed),
+  };
+
+  return {
+    ...prev,
+    ...freshPlan,
+    activeGeneralPlan: newPlanNum,
+    generalPlans: nextPlans,
+    generalPlan1: nextPlans[0],
+    generalPlan2: nextPlans[1] ?? fallbackPlan2,
+  };
+}
+
+export function duplicateActiveGeneralPlanInState(
+  prev: ProposalState
+): ProposalState {
+  const mode: QuoteMode = prev.quoteMode || 'general';
+  const plans = resolveGeneralPlansFromState(prev);
+  if (plans.length >= MAX_QUOTE_PLANS) return prev;
+
+  const activeIdx =
+    Math.min(
+      plans.length,
+      Math.max(1, Math.floor(Number(prev.activeGeneralPlan) || 1))
+    ) - 1;
+  const sourcePlan = plans[activeIdx];
+  const newPlanNum = plans.length + 1;
+  const clonedPlan = cloneGeneralPlanData(sourcePlan, `plan${newPlanNum}`);
+  const nextPlans = [...plans, extractGeneralPlanData(clonedPlan)];
+  const fallbackPlan2: GeneralPlanData = {
+    ...createEmptyGeneralPlanData(mode, 2),
+    hideHiPreed: Boolean(clonedPlan.hideHiPreed),
+    hideSubPreed: Boolean(clonedPlan.hideSubPreed),
+  };
+
+  return {
+    ...prev,
+    ...clonedPlan,
+    activeGeneralPlan: newPlanNum,
+    generalPlans: nextPlans,
+    generalPlan1: nextPlans[0],
+    generalPlan2: nextPlans[1] ?? fallbackPlan2,
+  };
+}
+
+export function copyPlan1ToPlan2InState(prev: ProposalState): ProposalState {
+  return duplicateActiveGeneralPlanInState(prev);
+}
+
+export function deleteGeneralPlanInState(
+  prev: ProposalState,
+  targetPlan: number
+): ProposalState {
+  const mode: QuoteMode = prev.quoteMode || 'general';
+  const plans = resolveGeneralPlansFromState(prev);
+  if (plans.length <= 1) return prev;
+
+  const delIdx = Math.floor(Number(targetPlan) || 0) - 1;
+  if (delIdx < 0 || delIdx >= plans.length) return prev;
+
+  const curActiveIdx =
+    Math.min(
+      plans.length,
+      Math.max(1, Math.floor(Number(prev.activeGeneralPlan) || 1))
+    ) - 1;
+  const nextPlans = plans.filter((_, idx) => idx !== delIdx);
+  const nextActiveIdx =
+    delIdx < curActiveIdx
+      ? curActiveIdx - 1
+      : Math.min(nextPlans.length - 1, curActiveIdx);
+  const nextActivePlan = nextActiveIdx + 1;
+  const nextActiveData = extractGeneralPlanData(nextPlans[nextActiveIdx]);
+  const fallbackPlan2: GeneralPlanData = {
+    ...createEmptyGeneralPlanData(mode, 2),
+    hideHiPreed: Boolean(nextActiveData.hideHiPreed),
+    hideSubPreed: Boolean(nextActiveData.hideSubPreed),
+  };
+
+  return {
+    ...prev,
+    ...nextActiveData,
+    activeGeneralPlan: nextActivePlan,
+    generalPlans: nextPlans,
+    generalPlan1: nextPlans[0],
+    generalPlan2: nextPlans[1] ?? fallbackPlan2,
+  };
+}
+
+export function confirmActiveGeneralPlanInState(
+  prev: ProposalState,
+  targetPlan?: number
+): ProposalState {
+  const mode: QuoteMode = prev.quoteMode || 'general';
+  const plans = resolveGeneralPlansFromState(prev);
+  const chosenIdx =
+    Math.min(
+      plans.length,
+      Math.max(
+        1,
+        Math.floor(Number(targetPlan ?? prev.activeGeneralPlan) || 1)
+      )
+    ) - 1;
+  const chosenData = extractGeneralPlanData(plans[chosenIdx]);
+  const emptyPlan2: GeneralPlanData = {
+    ...createEmptyGeneralPlanData(mode, 2),
+    hideHiPreed: Boolean(chosenData.hideHiPreed),
+    hideSubPreed: Boolean(chosenData.hideSubPreed),
+  };
+
+  return {
+    ...prev,
+    ...chosenData,
+    activeGeneralPlan: 1,
+    generalPlans: [chosenData],
+    generalPlan1: chosenData,
+    generalPlan2: emptyPlan2,
   };
 }
 
@@ -786,6 +1038,7 @@ export function calculateSubscriptionPhases(
     Math.min(Math.round(subLotteBillingDiscount || 0), totalSourcePrincipal)
   );
 
+  // 혼합 개월수(36·48·60 혼재)일 때 원금 비례로 5% 청구할인액을 배분하여 구간별 월 원구독료 산출
   const itemDiscs: number[] = sourcePrincipals.map(() => 0);
   if (isMixed && safeLotteDisc > 0 && totalSourcePrincipal > 0) {
     let allocated = 0;
@@ -1128,48 +1381,88 @@ export function calculateSubscriptionSummary(planData: GeneralPlanData) {
   };
 }
 
+export interface ResolvedPlanSummaryEntry {
+  planNum: number;
+  data: GeneralPlanData;
+  genSummary: ReturnType<typeof calculateGeneralPurchaseSummary>;
+  subSummary: ReturnType<typeof calculateSubscriptionSummary>;
+  hasGen: boolean;
+  hasSub: boolean;
+  hasData: boolean;
+}
+
+export function getAllGeneralPlanSummaries(
+  state: ProposalState
+): ResolvedPlanSummaryEntry[] {
+  const plans = resolveGeneralPlansFromState(state);
+  return plans.map((data, idx) => {
+    const genSummary = calculateGeneralPurchaseSummary(data);
+    const subSummary = calculateSubscriptionSummary(data);
+    const hasGen =
+      genSummary.sum > 0 ||
+      data.generalItems.some(
+        (it) =>
+          (it.category || '').trim() !== '' ||
+          (it.modelName || '').trim() !== ''
+      );
+    const hasSub = subSummary.hasSubData;
+    const hasData =
+      state.quoteMode === 'general'
+        ? hasGen
+        : state.quoteMode === 'subscription'
+        ? hasSub
+        : hasGen || hasSub;
+
+    return {
+      planNum: idx + 1,
+      data,
+      genSummary,
+      subSummary,
+      hasGen,
+      hasSub,
+      hasData,
+    };
+  });
+}
+
 export function getGeneralPlan1And2Summaries(state: ProposalState) {
-  const plan1Data =
-    state.activeGeneralPlan === 1
-      ? extractGeneralPlanData(state)
-      : extractGeneralPlanData(state.generalPlan1);
-  const plan2Data =
-    state.activeGeneralPlan === 2
-      ? extractGeneralPlanData(state)
-      : extractGeneralPlanData(state.generalPlan2);
+  const allPlans = getAllGeneralPlanSummaries(state);
+  const mode: QuoteMode = state.quoteMode || 'general';
+  const emptyPlan2 = createEmptyGeneralPlanData(mode, 2);
 
-  const plan1Summary = calculateGeneralPurchaseSummary(plan1Data);
-  const plan2Summary = calculateGeneralPurchaseSummary(plan2Data);
+  const p1 = allPlans[0];
+  const p2 = allPlans[1];
 
-  const plan1SubSummary = calculateSubscriptionSummary(plan1Data);
-  const plan2SubSummary = calculateSubscriptionSummary(plan2Data);
+  const plan1Data = p1
+    ? p1.data
+    : extractGeneralPlanData(state.generalPlan1 || state);
+  const plan2Data = p2
+    ? p2.data
+    : state.generalPlan2
+    ? extractGeneralPlanData(state.generalPlan2)
+    : emptyPlan2;
 
-  const hasPlan1Gen =
-    plan1Summary.sum > 0 ||
-    plan1Data.generalItems.some(
-      (it) =>
-        (it.category || '').trim() !== '' || (it.modelName || '').trim() !== ''
-    );
-  const hasPlan2Gen =
-    plan2Summary.sum > 0 ||
-    plan2Data.generalItems.some(
-      (it) =>
-        (it.category || '').trim() !== '' || (it.modelName || '').trim() !== ''
-    );
+  const plan1Summary = p1
+    ? p1.genSummary
+    : calculateGeneralPurchaseSummary(plan1Data);
+  const plan2Summary = p2
+    ? p2.genSummary
+    : calculateGeneralPurchaseSummary(plan2Data);
 
-  const hasPlan1Data =
-    state.quoteMode === 'general'
-      ? hasPlan1Gen
-      : state.quoteMode === 'subscription'
-      ? plan1SubSummary.hasSubData
-      : hasPlan1Gen || plan1SubSummary.hasSubData;
+  const plan1SubSummary = p1
+    ? p1.subSummary
+    : calculateSubscriptionSummary(plan1Data);
+  const plan2SubSummary = p2
+    ? p2.subSummary
+    : calculateSubscriptionSummary(plan2Data);
 
-  const hasPlan2Data =
-    state.quoteMode === 'general'
-      ? hasPlan2Gen
-      : state.quoteMode === 'subscription'
-      ? plan2SubSummary.hasSubData
-      : hasPlan2Gen || plan2SubSummary.hasSubData;
+  const hasPlan1Data = p1 ? p1.hasData : false;
+  const hasPlan2Data = p2 ? p2.hasData : false;
+
+  const validPlansCount = allPlans.filter((p) => p.hasData).length;
+  const hasMultiplePlans =
+    allPlans.length >= 2 &&
+    (validPlansCount >= 2 || (Number(state.activeGeneralPlan) || 1) > 1);
 
   return {
     plan1Data,
@@ -1180,6 +1473,10 @@ export function getGeneralPlan1And2Summaries(state: ProposalState) {
     plan2SubSummary,
     hasPlan1Data,
     hasPlan2Data,
+    allPlans,
+    totalPlanCount: allPlans.length,
+    validPlansCount,
+    hasMultiplePlans,
   };
 }
 
@@ -1293,10 +1590,11 @@ export interface ProposalState {
     hybrid?: GeneralPlanData;
   };
 
-  // 일반구매(일시불) 현재 활성 안 상태 (1안 또는 2안)
-  activeGeneralPlan: 1 | 2;
+  // 다중 견적안 상태 (1안 ~ 최대 6안, 하위호환 generalPlan1/generalPlan2 동기화)
+  activeGeneralPlan: number;
   generalPlan1: GeneralPlanData;
   generalPlan2: GeneralPlanData;
+  generalPlans?: GeneralPlanData[];
 
   generalItems: GeneralPurchaseItem[];
   generalCardType: GeneralCardType;
@@ -1686,6 +1984,7 @@ export function switchQuoteModeInState(
   if (prev.quoteMode === targetMode) return prev;
   const currentSnapshot = extractGeneralPlanData(prev);
   const targetData = resolveComparisonModePlanData(prev, targetMode);
+  const emptyPlan2 = createEmptyGeneralPlanData(targetMode, 2);
   return {
     ...prev,
     quoteMode: targetMode,
@@ -1695,14 +1994,16 @@ export function switchQuoteModeInState(
       [targetMode]: targetData,
     },
     activeGeneralPlan: 1,
+    generalPlans: [targetData],
     generalPlan1: targetData,
+    generalPlan2: emptyPlan2,
     ...targetData,
   };
 }
 
 export const createEmptyGeneralPlanData = (
   mode: QuoteMode,
-  planNum: 1 | 2
+  planNum: number = 1
 ): GeneralPlanData => ({
   generalItems: [
     {
@@ -1766,8 +2067,199 @@ export const createInitialState = (mode: QuoteMode): ProposalState => {
   return {
     quoteMode: mode,
     activeGeneralPlan: 1,
+    generalPlans: [plan1],
     generalPlan1: plan1,
     generalPlan2: plan2,
     ...plan1,
   };
 };
+
+// ==================== HISIS 판매접수등록 전표 → ProposalState 정식 빌더 ====================
+export interface HisisSlipGeneralItemInput {
+  category: string;
+  modelName: string;
+  productName?: string;
+  quantity: number;
+  /** 전산 접수금액 (행 합계) */
+  receiptAmount: number;
+  /** 전산 에누리 (행 합계) */
+  discountAmount?: number;
+  /** 전산 실구매가 (행 합계) */
+  actualPrice: number;
+}
+
+export interface HisisSlipSubscriptionItemInput {
+  category: string;
+  modelName: string;
+  /** 하단 [결제] 영역 신용카드 결제금액 기준 구독 약정원금 */
+  contractAmount: number;
+  /** SET-CARD 뒤 숫자(36 | 48 | 60) */
+  period: SubscriptionPeriod;
+  /** 월 구독료 (미지정 시 Math.round(contractAmount / period)) */
+  monthlyFee?: number;
+  careService?: string;
+  warrantyType?: string;
+}
+
+export interface BuildProposalFromHisisSlipInput {
+  mode: 'general' | 'subscription';
+  generalItems?: HisisSlipGeneralItemInput[];
+  subscriptionItems?: HisisSlipSubscriptionItemInput[];
+  generalCardType?: GeneralCardType;
+}
+
+/**
+ * HISIS [판매접수등록] 전표 추출 품목 데이터를 통합 견적기에서 즉시 열어 수정·공유 가능한
+ * 정식 ProposalState 객체로 1원 오차 없이 변환합니다.
+ */
+export function buildProposalStateFromHisisSlip(
+  input: BuildProposalFromHisisSlipInput
+): ProposalState {
+  if (input.mode === 'subscription') {
+    const base = createInitialState('subscription');
+    const rawSubs = Array.isArray(input.subscriptionItems)
+      ? input.subscriptionItems
+      : [];
+
+    const builtSubItems: SubscriptionItem[] =
+      rawSubs.length > 0
+        ? rawSubs.map((it, idx) => {
+            const period = normalizeSubscriptionPeriod(it.period, 60);
+            const contractAmount = Math.max(
+              0,
+              Math.round(Number(it.contractAmount) || 0)
+            );
+            const monthlyFee =
+              it.monthlyFee !== undefined && Number(it.monthlyFee) > 0
+                ? Math.round(Number(it.monthlyFee))
+                : period > 0
+                ? Math.round(contractAmount / period)
+                : 0;
+            const cleanModel = (it.modelName || '').trim();
+            const cleanCat = (it.category || '').trim() || '구독가전';
+            return {
+              id: `hisis-sub-${Date.now()}-${idx}`,
+              category: cleanCat,
+              modelName: cleanModel,
+              modelCode: cleanModel,
+              monthlyFee,
+              contractAmount,
+              period,
+              careService: it.careService || SUB_CARE_OPTIONS[0],
+              careType: it.careService || SUB_CARE_OPTIONS[0],
+              warrantyType: it.warrantyType || 'AS연장보험 + 가전수리올케어',
+            };
+          })
+        : base.generalPlan1.items;
+
+    const repPeriod = normalizeSubscriptionPeriod(
+      builtSubItems[0]?.period,
+      60
+    );
+
+    const plan1: GeneralPlanData = {
+      ...base.generalPlan1,
+      items: builtSubItems,
+      subscriptionPeriod: repPeriod,
+      careService: builtSubItems[0]?.careService || SUB_CARE_OPTIONS[0],
+      warrantyType:
+        builtSubItems[0]?.warrantyType || 'AS연장보험 + 가전수리올케어',
+      warrantyYears: 5,
+      allCare: true,
+      selectedCardId: 'none',
+      selectedCardTierId: '',
+      subAutoTierCashback: false,
+      subManualTierCashback: 0,
+      subExtraCashback: 0,
+      subLotteBilling5p: false,
+    };
+
+    return {
+      ...base,
+      quoteMode: 'subscription',
+      activeGeneralPlan: 1,
+      generalPlans: [plan1],
+      generalPlan1: plan1,
+      ...plan1,
+    };
+  }
+
+  // 일반구매 전표: payPrice === 실구매가 합계, rawNet === 실구매가 합계 1원 오차 없이 일치
+  const base = createInitialState('general');
+  const rawGen = Array.isArray(input.generalItems) ? input.generalItems : [];
+
+  let totalInstantDiscount = 0;
+  const builtGeneralItems: GeneralPurchaseItem[] =
+    rawGen.length > 0
+      ? rawGen.map((it, idx) => {
+          const qty = Math.max(1, Math.round(Number(it.quantity) || 1));
+          const actual = Math.max(0, Math.round(Number(it.actualPrice) || 0));
+          const receipt = Math.max(
+            actual,
+            Math.round(Number(it.receiptAmount) || actual)
+          );
+
+          let unitPrice = 0;
+          let itemDiscount = 0;
+
+          if (receipt > actual) {
+            unitPrice =
+              receipt % qty === 0 ? receipt / qty : Math.ceil(receipt / qty);
+            itemDiscount = Math.max(0, unitPrice * qty - actual);
+          } else {
+            unitPrice =
+              actual % qty === 0 ? actual / qty : Math.ceil(actual / qty);
+            itemDiscount = Math.max(0, unitPrice * qty - actual);
+          }
+
+          totalInstantDiscount += itemDiscount;
+
+          const cleanModel = (it.modelName || '').trim();
+          const cleanCat = (it.category || '').trim() || '일반가전';
+
+          return {
+            id: `hisis-gen-${Date.now()}-${idx}`,
+            category: cleanCat,
+            modelName: cleanModel,
+            code: cleanModel,
+            name: it.productName || cleanCat,
+            quantity: qty,
+            qty,
+            unitPrice,
+            price: unitPrice * qty,
+            discount1: idx === 0 ? itemDiscount : 0,
+            discount2: 0,
+            cashback: 0,
+          };
+        })
+      : base.generalPlan1.generalItems;
+
+  if (builtGeneralItems.length > 0 && totalInstantDiscount > 0) {
+    builtGeneralItems[0] = {
+      ...builtGeneralItems[0],
+      discount1: totalInstantDiscount,
+    };
+  }
+
+  const plan1: GeneralPlanData = {
+    ...base.generalPlan1,
+    generalItems: builtGeneralItems,
+    generalCardType: input.generalCardType || '일반카드',
+    instantDiscount: totalInstantDiscount,
+    earnedPoints: 0,
+    pointUsed: 0,
+    autoTierCashback: false,
+    manualTierCashback: 0,
+    extraCashback: 0,
+    extraBenefits: [],
+  };
+
+  return {
+    ...base,
+    quoteMode: 'general',
+    activeGeneralPlan: 1,
+    generalPlans: [plan1],
+    generalPlan1: plan1,
+    ...plan1,
+  };
+}

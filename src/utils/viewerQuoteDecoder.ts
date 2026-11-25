@@ -7,9 +7,11 @@ import {
   GeneralPlanData,
   getActiveCompareModes,
   HiPlusPayoutMethod,
+  MAX_QUOTE_PLANS,
   normalizeSubscriptionPeriod,
   ProposalState,
   QuoteMode,
+  resolveGeneralPlansFromState,
   SUB_CARE_OPTIONS,
   SubscriptionPeriod,
   switchQuoteModeInState,
@@ -278,13 +280,36 @@ export function unpackCompactQuoteV2(arr: any[]): SharedQuotePayload | null {
 
   const quoteMode: QuoteMode = QUOTE_MODES[Number(arr[4]) || 0] || 'general';
   const hasPlan2 = Array.isArray(arr[7]);
-  const activeGeneralPlan: 1 | 2 = arr[5] === 2 && hasPlan2 ? 2 : 1;
 
   const plan1 = unpackPlanTuple(arr[6], 'p1');
   const plan2 = hasPlan2
     ? unpackPlanTuple(arr[7], 'p2')
     : unpackPlanTuple([], 'p2');
-  const activeFields = activeGeneralPlan === 2 ? plan2 : plan1;
+
+  const rawExtra = Array.isArray(arr[10])
+    ? arr[10].filter(Array.isArray).slice(0, MAX_QUOTE_PLANS - 2)
+    : [];
+  const extraPlans = rawExtra.map((tuple: any[], idx: number) =>
+    extractGeneralPlanData(unpackPlanTuple(tuple, `p${idx + 3}`))
+  );
+
+  const generalPlans: GeneralPlanData[] =
+    extraPlans.length > 0
+      ? [
+          extractGeneralPlanData(plan1),
+          extractGeneralPlanData(plan2),
+          ...extraPlans,
+        ]
+      : hasPlan2
+      ? [extractGeneralPlanData(plan1), extractGeneralPlanData(plan2)]
+      : [extractGeneralPlanData(plan1)];
+
+  const rawActiveNum = Math.floor(Number(arr[5]) || 1);
+  const activeGeneralPlan =
+    rawActiveNum >= 1 && rawActiveNum <= generalPlans.length
+      ? rawActiveNum
+      : 1;
+  const activeFields = generalPlans[activeGeneralPlan - 1] || generalPlans[0];
 
   const compareMask = Number(arr[8]) || 0;
   const compareModes: QuoteMode[] = [];
@@ -312,8 +337,9 @@ export function unpackCompactQuoteV2(arr: any[]): SharedQuotePayload | null {
     ...(compareModes.length >= 2 ? { compareModes } : {}),
     ...(modeConfigs ? { modeConfigs } : {}),
     activeGeneralPlan,
-    generalPlan1: extractGeneralPlanData(plan1),
-    generalPlan2: extractGeneralPlanData(plan2),
+    generalPlans,
+    generalPlan1: generalPlans[0],
+    generalPlan2: generalPlans[1] ?? extractGeneralPlanData(plan2),
     ...extractGeneralPlanData(activeFields),
   };
 
@@ -352,14 +378,22 @@ export function normalizeDecodedPayload(raw: any): SharedQuotePayload | null {
       }
     : undefined;
 
-  const activeGeneralPlan: 1 | 2 = st.activeGeneralPlan === 2 ? 2 : 1;
-  const activePlanFields = extractGeneralPlanData(st);
-  const plan1 = st.generalPlan1
-    ? extractGeneralPlanData(st.generalPlan1)
-    : activePlanFields;
-  const plan2 = st.generalPlan2
-    ? extractGeneralPlanData(st.generalPlan2)
-    : extractGeneralPlanData(undefined);
+  const resolvedPlans = resolveGeneralPlansFromState(st);
+  const rawActiveNum = Math.floor(Number(st.activeGeneralPlan) || 1);
+  const activeGeneralPlan =
+    rawActiveNum >= 1 && rawActiveNum <= resolvedPlans.length
+      ? rawActiveNum
+      : 1;
+  const activePlanFields =
+    resolvedPlans[activeGeneralPlan - 1] ||
+    resolvedPlans[0] ||
+    extractGeneralPlanData(st);
+  const plan1 = resolvedPlans[0] || activePlanFields;
+  const plan2 =
+    resolvedPlans[1] ||
+    (st.generalPlan2
+      ? extractGeneralPlanData(st.generalPlan2)
+      : extractGeneralPlanData(undefined));
 
   const baseState: ProposalState = {
     ...st,
@@ -367,6 +401,7 @@ export function normalizeDecodedPayload(raw: any): SharedQuotePayload | null {
     ...(compareModes.length >= 2 ? { compareModes } : { compareModes: undefined }),
     ...(normalizedMc ? { modeConfigs: normalizedMc } : {}),
     activeGeneralPlan,
+    generalPlans: resolvedPlans,
     generalPlan1: plan1,
     generalPlan2: plan2,
     ...activePlanFields,
@@ -395,7 +430,26 @@ export function normalizeDecodedPayload(raw: any): SharedQuotePayload | null {
   };
 }
 
-function extractTokenFromLocation(searchStr?: string, hashStr?: string): string | null {
+export function extractShareParamsFromLocation(
+  searchStr?: string,
+  hashStr?: string,
+  pathnameStr?: string
+): { shortCode?: string; token?: string } {
+  try {
+    const p =
+      typeof pathnameStr === 'string'
+        ? pathnameStr
+        : typeof window !== 'undefined'
+        ? window.location.pathname
+        : '';
+    const pathMatch = p.match(/\/q\/([A-Za-z0-9_-]{4,16})\/?$/);
+    if (pathMatch && pathMatch[1]) {
+      return { shortCode: pathMatch[1] };
+    }
+  } catch {
+    // ignore
+  }
+
   try {
     const s =
       typeof searchStr === 'string'
@@ -405,12 +459,20 @@ function extractTokenFromLocation(searchStr?: string, hashStr?: string): string 
         : '';
     if (s) {
       const params = new URLSearchParams(s);
+      const qVal = (params.get('q') || '').trim();
+      if (qVal) {
+        if (/^[A-Za-z0-9_-]{4,16}$/.test(qVal)) {
+          return { shortCode: qVal };
+        }
+        return { token: qVal };
+      }
       const tok = params.get('s') || params.get('share');
-      if (tok && tok.trim()) return tok.trim();
+      if (tok && tok.trim()) return { token: tok.trim() };
     }
   } catch {
     // ignore
   }
+
   try {
     const h =
       typeof hashStr === 'string'
@@ -419,12 +481,26 @@ function extractTokenFromLocation(searchStr?: string, hashStr?: string): string 
         ? window.location.hash
         : '';
     const clean = h.replace(/^#/, '').trim();
-    if (clean.startsWith('s=')) return decodeURIComponent(clean.slice(2)).trim();
-    if (clean.startsWith('share=')) return decodeURIComponent(clean.slice(6)).trim();
+    if (clean.startsWith('q=')) {
+      const qVal = decodeURIComponent(clean.slice(2)).trim();
+      if (qVal) {
+        return /^[A-Za-z0-9_-]{4,16}$/.test(qVal)
+          ? { shortCode: qVal }
+          : { token: qVal };
+      }
+    }
+    if (clean.startsWith('s=')) {
+      const tok = decodeURIComponent(clean.slice(2)).trim();
+      if (tok) return { token: tok };
+    }
+    if (clean.startsWith('share=')) {
+      const tok = decodeURIComponent(clean.slice(6)).trim();
+      if (tok) return { token: tok };
+    }
   } catch {
     // ignore
   }
-  return null;
+  return {};
 }
 
 export async function decodeSharedQuoteToken(
@@ -489,6 +565,22 @@ export async function decodeSharedQuoteToken(
   }
 }
 
+async function resolveShortCodeToken(shortCode: string): Promise<string | null> {
+  if (!shortCode || typeof fetch === 'undefined') return null;
+  try {
+    const res = await fetch(`/api/share-quote/${encodeURIComponent(shortCode)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data.token === 'string' && data.token) {
+        return data.token;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 export async function decodeQuoteFromCurrentUrl(
   urlQueryOrHash?: string
 ): Promise<SharedQuotePayload | null> {
@@ -497,22 +589,42 @@ export async function decodeQuoteFromCurrentUrl(
     if (/^https?:\/\//i.test(t)) {
       try {
         const u = new URL(t);
-        const tokenFromUrl = extractTokenFromLocation(u.search, u.hash);
-        return tokenFromUrl ? decodeSharedQuoteToken(tokenFromUrl) : null;
+        const extracted = extractShareParamsFromLocation(u.search, u.hash, u.pathname);
+        if (extracted.shortCode) {
+          const resolvedTok = await resolveShortCodeToken(extracted.shortCode);
+          if (resolvedTok) return decodeSharedQuoteToken(resolvedTok);
+        }
+        return extracted.token ? decodeSharedQuoteToken(extracted.token) : null;
       } catch {
         return null;
       }
     }
-    const token = t.startsWith('?')
-      ? extractTokenFromLocation(t, '')
+    const extracted = t.startsWith('?')
+      ? extractShareParamsFromLocation(t, '', '')
       : t.startsWith('#')
-      ? extractTokenFromLocation('', t)
-      : t;
-    return token ? decodeSharedQuoteToken(token) : null;
+      ? extractShareParamsFromLocation('', t, '')
+      : t.startsWith('/q/')
+      ? extractShareParamsFromLocation('', '', t)
+      : { token: t };
+    if (extracted.shortCode) {
+      const resolvedTok = await resolveShortCodeToken(extracted.shortCode);
+      if (resolvedTok) return decodeSharedQuoteToken(resolvedTok);
+    }
+    return extracted.token ? decodeSharedQuoteToken(extracted.token) : null;
   }
-  const token = extractTokenFromLocation();
-  if (!token) return null;
-  return decodeSharedQuoteToken(token);
+
+  const loc = extractShareParamsFromLocation();
+  if (loc.shortCode) {
+    const resolvedTok = await resolveShortCodeToken(loc.shortCode);
+    if (resolvedTok) {
+      const decoded = await decodeSharedQuoteToken(resolvedTok);
+      if (decoded) return decoded;
+    }
+  }
+  if (loc.token) {
+    return decodeSharedQuoteToken(loc.token);
+  }
+  return null;
 }
 
 export const decodeSharedQuoteFromLocation = decodeQuoteFromCurrentUrl;

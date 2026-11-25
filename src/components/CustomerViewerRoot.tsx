@@ -46,7 +46,9 @@ import {
   MapPin,
   MessageSquare,
   Phone,
+  Printer,
   RotateCcw,
+  Share2,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -215,8 +217,35 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
   );
   const [showCompliance, setShowCompliance] = useState<boolean>(false);
   const [showCustomControls, setShowCustomControls] = useState<boolean>(false);
+  const [copiedShareLink, setCopiedShareLink] = useState<boolean>(false);
   const simulatorRef = useRef<HTMLElement | null>(null);
   const pendingSimAnchorTopRef = useRef<number | null>(null);
+
+  const handleShareOrCopyLink = async () => {
+    const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+    if (!currentUrl) return;
+    if (
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function'
+    ) {
+      try {
+        await navigator.share({
+          title: payload.customerName
+            ? `${payload.customerName} 고객님 맞춤 가전 견적서`
+            : `${payload.consultant.storeName || '롯데하이마트'} 맞춤 가전 견적서`,
+          url: currentUrl,
+        });
+        return;
+      } catch {
+        // 취소 시 클립보드 복사로 폴백
+      }
+    }
+    const ok = await safeCopyText(currentUrl);
+    if (ok) {
+      setCopiedShareLink(true);
+      window.setTimeout(() => setCopiedShareLink(false), 2200);
+    }
+  };
 
   // 공유 링크 최초 진입 시 무조건 최상단(0px)부터 시작
   useLayoutEffect(() => {
@@ -257,15 +286,12 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
   };
 
   const activePlan = simState.activeGeneralPlan || 1;
-  const {
-    plan1Summary,
-    plan2Summary,
-    plan1SubSummary,
-    plan2SubSummary,
-    hasPlan1Data,
-    hasPlan2Data,
-  } = getGeneralPlan1And2Summaries(simState);
-  const hasBothPlans = hasPlan1Data && hasPlan2Data;
+  const { allPlans } = getGeneralPlan1And2Summaries(simState);
+  const validSharePlans = useMemo(
+    () => allPlans.filter((p) => p.hasData),
+    [allPlans]
+  );
+  const hasBothPlans = allPlans.length >= 2 && validSharePlans.length >= 2;
 
   const generalSummary = calculateGeneralPurchaseSummary(simState);
   const generalHiPreed = calculateGeneralHiPreedSummary(
@@ -298,14 +324,20 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
     if (payloadCompareModes.length >= 2) {
       return resolveComparisonModePlanData(payload.state, simState.quoteMode);
     }
-    if (activePlan === 2 && hasPlan2Data && payload.state.generalPlan2) {
+    if (
+      Array.isArray(payload.state.generalPlans) &&
+      payload.state.generalPlans[activePlan - 1]
+    ) {
+      return payload.state.generalPlans[activePlan - 1];
+    }
+    if (activePlan === 2 && payload.state.generalPlan2) {
       return payload.state.generalPlan2;
     }
     if (payload.state.generalPlan1) {
       return payload.state.generalPlan1;
     }
     return payload.state;
-  }, [payloadCompareModes, payload.state, simState.quoteMode, activePlan, hasPlan2Data]);
+  }, [payloadCompareModes, payload.state, simState.quoteMode, activePlan]);
 
   const originGeneralAffiliateCard = isAffiliateGeneralCardType(
     originPlanData.generalCardType
@@ -621,26 +653,42 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
     showSub && (Boolean(originSubAffiliateCard) || !simState.hideSubPreed);
   const showSimulatorSection = hasGeneralSim || hasSubSim;
 
-  const plan1ComparePrice =
-    simState.quoteMode === 'subscription'
-      ? plan1SubSummary.finalMonthlyFee
-      : simState.quoteMode === 'hybrid'
-      ? plan1Summary.rawNet + plan1SubSummary.finalTotalFee
-      : plan1Summary.rawNet;
-  const plan2ComparePrice =
-    simState.quoteMode === 'subscription'
-      ? plan2SubSummary.finalMonthlyFee
-      : simState.quoteMode === 'hybrid'
-      ? plan2Summary.rawNet + plan2SubSummary.finalTotalFee
-      : plan2Summary.rawNet;
-  const planDiffAmount = Math.abs(plan1ComparePrice - plan2ComparePrice);
-  const planTotalSubDiff = Math.abs(plan1SubSummary.finalTotalFee - plan2SubSummary.finalTotalFee);
-  const cheaperPlanNum =
-    plan1ComparePrice < plan2ComparePrice
-      ? 1
-      : plan2ComparePrice < plan1ComparePrice
-      ? 2
-      : 0;
+  const planCompareMetrics = useMemo(() => {
+    if (validSharePlans.length < 2) {
+      return { cheaperPlanNum: 0, planDiffAmount: 0, planTotalSubDiff: 0 };
+    }
+    const priced = validSharePlans.map((p) => {
+      const compareVal =
+        simState.quoteMode === 'subscription'
+          ? p.subSummary.finalMonthlyFee
+          : simState.quoteMode === 'hybrid'
+          ? p.genSummary.rawNet + p.subSummary.finalTotalFee
+          : p.genSummary.rawNet;
+      return {
+        planNum: p.planNum,
+        compareVal,
+        subTotalVal: p.subSummary.finalTotalFee,
+      };
+    });
+    let minItem = priced[0];
+    let maxItem = priced[0];
+    for (const item of priced) {
+      if (item.compareVal < minItem.compareVal) minItem = item;
+      if (item.compareVal > maxItem.compareVal) maxItem = item;
+    }
+    const diff = Math.abs(maxItem.compareVal - minItem.compareVal);
+    const subTotalDiff = Math.abs(maxItem.subTotalVal - minItem.subTotalVal);
+    return {
+      cheaperPlanNum: diff > 0 ? minItem.planNum : 0,
+      planDiffAmount: diff,
+      planTotalSubDiff: subTotalDiff,
+    };
+  }, [validSharePlans, simState.quoteMode]);
+
+  const { cheaperPlanNum, planDiffAmount, planTotalSubDiff } = planCompareMetrics;
+  const mapSearchUrl = `https://map.naver.com/p/search/${encodeURIComponent(
+    payload.consultant.storeName || '롯데하이마트 경기광주점'
+  )}`;
 
   const containerMaxW = 'max-w-2xl min-[700px]:max-w-3xl lg:max-w-4xl';
 
@@ -666,6 +714,15 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              title="견적서 인쇄 / PDF 저장"
+              className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-[#F8FAFC] dark:bg-slate-800 hover:bg-[#F2F4F6] text-[#4E5968] dark:text-slate-200 border border-[#D1D6DB] dark:border-slate-700 text-[11px] font-extrabold cursor-pointer whitespace-nowrap"
+            >
+              <Printer className="w-3.5 h-3.5 shrink-0" />
+              <span>인쇄</span>
+            </button>
             {isModifiedFromOriginal ? (
               <button
                 type="button"
@@ -737,19 +794,23 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
           />
         )}
 
-        {/* 1안 vs 2안 실시간 비교 스위치 */}
+        {/* 다중 안(1안 ~ N안) 실시간 비교 스위치 */}
         {activeCompareModes.length < 2 && hasBothPlans && (
           <div className="no-print rounded-2xl bg-white dark:bg-[#131C2E] border border-[#D1D6DB] dark:border-slate-700/80 p-3 sm:p-4 space-y-2 shadow-[0_2px_10px_rgba(25,31,40,0.03)]">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="font-black text-[#191F28] dark:text-slate-100 flex items-center gap-1.5 whitespace-nowrap shrink-0">
                 <Layers className="w-4 h-4 text-[#1B64DA] dark:text-blue-400 shrink-0" />
-                <span>맞춤 설계 1안 ↔ 2안 비교</span>
+                <span>
+                  맞춤 설계{' '}
+                  {validSharePlans.map((p) => `${p.planNum}안`).join(' ↔ ')}{' '}
+                  비교
+                </span>
               </span>
               {cheaperPlanNum > 0 && (planDiffAmount > 0 || planTotalSubDiff > 0) ? (
                 <span className="px-2 py-0.5 rounded-full bg-[#EFF6FF] dark:bg-blue-950/60 border border-[#BFDBFE] dark:border-blue-800 text-[#1B64DA] dark:text-blue-300 text-[11px] font-extrabold font-mono tabular-nums break-keep">
                   {simState.quoteMode === 'subscription'
-                    ? `${cheaperPlanNum}안 선택 시 월 ${planDiffAmount.toLocaleString()}원 · ${subSummary.periodLabel} 총 ${planTotalSubDiff.toLocaleString()}원 절감`
-                    : `${cheaperPlanNum}안 선택 시 ${planDiffAmount.toLocaleString()}원 추가 절감`}
+                    ? `${cheaperPlanNum}안 선택 시 최대 월 ${planDiffAmount.toLocaleString()}원 · ${subSummary.periodLabel} 총 ${planTotalSubDiff.toLocaleString()}원 절감`
+                    : `${cheaperPlanNum}안 선택 시 최대 ${planDiffAmount.toLocaleString()}원 절감`}
                 </span>
               ) : (
                 <span className="text-[11px] font-semibold text-[#8B95A1] dark:text-slate-400 whitespace-nowrap">
@@ -757,11 +818,16 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                 </span>
               )}
             </div>
-            <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2">
-              {[1, 2].map((pNum) => {
+            <div
+              className={`grid grid-cols-1 min-[380px]:grid-cols-2 ${
+                validSharePlans.length >= 3 ? 'md:grid-cols-3' : ''
+              } gap-2`}
+            >
+              {validSharePlans.map((pEntry) => {
+                const pNum = pEntry.planNum;
                 const isSelected = activePlan === pNum;
-                const gSum = pNum === 1 ? plan1Summary : plan2Summary;
-                const sSum = pNum === 1 ? plan1SubSummary : plan2SubSummary;
+                const gSum = pEntry.genSummary;
+                const sSum = pEntry.subSummary;
                 const sSurplus = getSubscriptionSurplusMeta(
                   sSum.finalMonthlyFee,
                   sSum.hiPlusPayoutMethod
@@ -780,10 +846,8 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                 const subPrice =
                   simState.quoteMode === 'subscription'
                     ? sSurplus.isSurplusZone || sSum.finalTotalFee <= 0
-                      ? sSurplus.monthlySurplus > 0
-                        ? `총 +${(
-                            sSurplus.monthlySurplus * sSum.representativePeriod
-                          ).toLocaleString()}원 초과 혜택`
+                      ? sSum.totalTermSurplus > 0
+                        ? `총 +${sSum.totalTermSurplus.toLocaleString()}원 초과 혜택`
                         : '총 체감 0원'
                       : `총 체감 ${sSum.finalTotalFee.toLocaleString()}원`
                     : simState.quoteMode === 'hybrid'
@@ -795,7 +859,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                     type="button"
                     onClick={() =>
                       setSimState((prev) =>
-                        switchGeneralPlanInState(prev, pNum as 1 | 2)
+                        switchGeneralPlanInState(prev, pNum)
                       )
                     }
                     className={`p-2.5 sm:p-3 rounded-xl text-left border-2 transition cursor-pointer schedule-tactile min-w-0 ${
@@ -817,7 +881,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                       {isSelected && (
                         <span className="inline-flex items-center gap-0.5 text-[11px] font-extrabold text-emerald-300">
                           <Check className="w-3 h-3 stroke-[3]" />
-                          <span>선택됨</span>
+                          <span className="hidden min-[380px]:inline">선택됨</span>
                         </span>
                       )}
                     </div>
@@ -1395,7 +1459,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
 
           <div className="flex items-center gap-1.5 sm:gap-2 w-full min-[480px]:w-auto shrink-0">
             <a
-              href="https://map.naver.com/p/search/%EB%A1%AF%EB%8D%B0%ED%95%98%EC%9D%B4%EB%A7%88%ED%8A%B8%20%EA%B2%BD%EA%B8%B0%EA%B4%91%EC%A3%BC%EC%A0%90"
+              href={mapSearchUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="min-h-[42px] min-w-[42px] p-2 rounded-xl bg-[#F8FAFC] dark:bg-slate-800 hover:bg-[#F2F4F6] text-[#191F28] dark:text-slate-200 border border-[#D1D6DB] dark:border-slate-700 inline-flex items-center justify-center shrink-0"
@@ -1403,6 +1467,29 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
             >
               <MapPin className="w-4 h-4 text-[#4E5968] dark:text-slate-300" />
             </a>
+
+            <button
+              type="button"
+              onClick={() => void handleShareOrCopyLink()}
+              className={`min-h-[42px] px-2.5 sm:px-3 py-2 rounded-xl border text-xs font-extrabold inline-flex items-center justify-center gap-1 schedule-tactile whitespace-nowrap cursor-pointer shrink-0 transition ${
+                copiedShareLink
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-[#F8FAFC] dark:bg-slate-800 hover:bg-[#F2F4F6] text-[#191F28] dark:text-slate-100 border-[#D1D6DB] dark:border-slate-700'
+              }`}
+              title="가족·배우자에게 견적 링크 공유 또는 복사"
+            >
+              {copiedShareLink ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-white shrink-0" />
+                  <span>복사됨</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-3.5 h-3.5 text-[#1B64DA] dark:text-blue-400 shrink-0" />
+                  <span>공유</span>
+                </>
+              )}
+            </button>
 
             {cleanPhone && (
               <a
@@ -1412,7 +1499,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                     ? '&'
                     : '?'
                 }body=${smsBody}`}
-                className="min-h-[42px] flex-1 min-[480px]:flex-initial px-3 py-2 rounded-xl bg-[#F8FAFC] dark:bg-slate-800 hover:bg-[#F2F4F6] text-[#191F28] dark:text-slate-100 border border-[#D1D6DB] dark:border-slate-700 text-xs font-extrabold inline-flex items-center justify-center gap-1.5 schedule-tactile whitespace-nowrap"
+                className="min-h-[42px] flex-1 min-[480px]:flex-initial px-2.5 sm:px-3 py-2 rounded-xl bg-[#F8FAFC] dark:bg-slate-800 hover:bg-[#F2F4F6] text-[#191F28] dark:text-slate-100 border border-[#D1D6DB] dark:border-slate-700 text-xs font-extrabold inline-flex items-center justify-center gap-1.5 schedule-tactile whitespace-nowrap"
               >
                 <MessageSquare className="w-3.5 h-3.5 text-[#1B64DA] dark:text-blue-400 shrink-0" />
                 <span>문자 문의</span>
@@ -1422,21 +1509,19 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
             {cleanPhone ? (
               <a
                 href={`tel:${cleanPhone}`}
-                className="min-h-[42px] flex-[1.25] min-[480px]:flex-initial px-3.5 sm:px-4 py-2 rounded-xl bg-[#E60012] hover:bg-[#C8000F] text-white text-xs sm:text-sm font-black inline-flex items-center justify-center gap-1.5 shadow-xs schedule-tactile whitespace-nowrap"
+                className="min-h-[42px] flex-[1.25] min-[480px]:flex-initial px-3 sm:px-4 py-2 rounded-xl bg-[#E60012] hover:bg-[#C8000F] text-white text-xs sm:text-sm font-black inline-flex items-center justify-center gap-1.5 shadow-xs schedule-tactile whitespace-nowrap"
               >
                 <Phone className="w-3.5 h-3.5 text-white shrink-0" />
-                <span>담당자 바로 통화</span>
+                <span>담당자 통화</span>
               </a>
             ) : (
               <button
                 type="button"
-                onClick={async () => {
-                  await safeCopyText(window.location.href);
-                }}
+                onClick={() => void handleShareOrCopyLink()}
                 className="min-h-[42px] flex-1 min-[480px]:flex-initial px-3.5 py-2 rounded-xl bg-[#E60012] hover:bg-[#C8000F] text-white text-xs font-black inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
               >
                 <Gift className="w-3.5 h-3.5 text-white shrink-0" />
-                <span>이 혜택 조건 보관</span>
+                <span>{copiedShareLink ? '견적 링크 복사됨' : '이 혜택 조건 보관'}</span>
               </button>
             )}
           </div>

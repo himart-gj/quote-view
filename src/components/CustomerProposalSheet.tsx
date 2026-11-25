@@ -1184,12 +1184,12 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
             </div>
           </div>
 
-          {/* 통합 최종 혜택 합계 카드 (중복 브리핑 배너 제거) */}
-          <div className="rounded-2xl bg-gradient-to-br from-[#FFF1F2] via-[#FFF6F7] to-white dark:from-rose-950/55 dark:via-[#161D2F] dark:to-[#131C2E] border-2 border-[#E60012] dark:border-[#FF3B47] p-3.5 sm:p-4 shadow-[0_6px_18px_rgba(230,0,18,0.08)]">
+          {/* 통합 최종 혜택 합계 카드 — ① 오늘 일시불 체감 + ② 매월 구독 체감 2분할 직관 요약 */}
+          <div className="rounded-2xl bg-gradient-to-br from-[#FFF1F2] via-[#FFF6F7] to-white dark:from-rose-950/55 dark:via-[#161D2F] dark:to-[#131C2E] border-2 border-[#E60012] dark:border-[#FF3B47] p-3.5 sm:p-4 shadow-[0_6px_18px_rgba(230,0,18,0.08)] space-y-2.5">
             <div className="flex items-center justify-between gap-1.5 flex-wrap">
               <span className="inline-flex items-center gap-1 text-xs font-black text-[#E60012] dark:text-[#FF6B78]">
                 <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                일반구매 + 구독 통합 최종 체감 합계
+                일반구매 {generalSummary.displayItems.length}품목 + 구독케어 {subSummary.displayItems.length}품목 핵심 요약
               </span>
               {hybridTotalDiscountAndSupport > 0 && (
                 <span className="px-2 py-0.5 rounded-full bg-white dark:bg-slate-900 border border-[#FECDD3] dark:border-rose-700 text-[#E60012] dark:text-rose-300 text-[11px] font-extrabold font-mono tabular-nums whitespace-nowrap">
@@ -1197,13 +1197,75 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                 </span>
               )}
             </div>
-            <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <div className="text-[clamp(1.5rem,6.5vw,2rem)] font-black text-[#E60012] dark:text-[#FF5A65] font-mono tabular-nums whitespace-nowrap leading-none">
+
+            <div className="grid grid-cols-1 min-[440px]:grid-cols-2 gap-2.5">
+              {/* ① 오늘 일시불 구매 체감가 */}
+              <div className="rounded-xl bg-white/95 dark:bg-slate-900/80 border border-[#FECDD3] dark:border-rose-800/70 px-3 py-2.5 space-y-1">
+                <div className="flex items-center justify-between gap-1 flex-wrap">
+                  <span className="text-[11px] font-extrabold text-[#4E5968] dark:text-slate-300">
+                    ① 일반구매 일시불 체감가
+                  </span>
+                  <span className="text-[10.5px] font-bold text-[#8B95A1] dark:text-slate-400 font-mono tabular-nums whitespace-nowrap">
+                    실결제 {generalSummary.payPrice.toLocaleString()}원
+                  </span>
+                </div>
+                <div className="text-lg sm:text-xl font-black text-[#E60012] dark:text-[#FF5A65] font-mono tabular-nums whitespace-nowrap leading-tight">
+                  <SpringNumberFlow value={generalSummary.rawNet} suffix="원" />
+                </div>
+              </div>
+
+              {/* ② 매월 구독 체감 요금 */}
+              <div className="rounded-xl bg-white/95 dark:bg-slate-900/80 border border-[#BFDBFE] dark:border-blue-800/70 px-3 py-2.5 space-y-1">
+                <div className="flex items-center justify-between gap-1 flex-wrap">
+                  <span className="text-[11px] font-extrabold text-[#1B64DA] dark:text-blue-300">
+                    ② 매월 구독 체감 ({subSummary.periodLabel})
+                  </span>
+                  <span className="text-[10.5px] font-bold text-[#8B95A1] dark:text-slate-400 font-mono tabular-nums whitespace-nowrap">
+                    {subSurplus.isSurplusZone || subSummary.finalTotalFee <= 0
+                      ? subSummary.totalTermSurplus > 0
+                        ? `누적 +${subSummary.totalTermSurplus.toLocaleString()}원 혜택`
+                        : '총 체감 0원'
+                      : `약정 총 ${subSummary.finalTotalFee.toLocaleString()}원`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {subSurplus.isSurplusZone ? (
+                    <>
+                      <span className="text-lg sm:text-xl font-black text-emerald-700 dark:text-emerald-400 font-mono tabular-nums whitespace-nowrap leading-tight">
+                        월 0원
+                      </span>
+                      {subSurplus.monthlySurplus > 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10.5px] font-extrabold font-mono tabular-nums whitespace-nowrap">
+                          {subSurplus.surplusStickyText}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-lg sm:text-xl font-black text-[#1B64DA] dark:text-blue-400 font-mono tabular-nums whitespace-nowrap leading-tight">
+                      월 <SpringNumberFlow value={subSummary.finalMonthlyFee} suffix="원" />
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 하단 만기 통합 최종 체감 합계 및 투명 산출식 */}
+            <div className="pt-2 border-t border-[#FECDD3]/80 dark:border-rose-800/60 flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-0.5 min-w-0">
+                <div className="text-xs font-extrabold text-[#191F28] dark:text-slate-100">
+                  {subSummary.periodLabel} 만기 기준 통합 최종 체감 합계
+                </div>
+                <div className="text-[11px] font-semibold text-[#4E5968] dark:text-slate-300 font-mono tabular-nums break-keep">
+                  {subSummary.finalTotalFee < 0
+                    ? `일시불 체감 ${generalSummary.rawNet.toLocaleString()}원 − 구독 누적 초과혜택 ${Math.abs(
+                        subSummary.finalTotalFee
+                      ).toLocaleString()}원 상계 반영`
+                    : `일시불 체감 ${generalSummary.rawNet.toLocaleString()}원 + 구독 ${subSummary.periodLabel} 총 체감 ${subSummary.finalTotalFee.toLocaleString()}원`}
+                </div>
+              </div>
+              <div className="text-lg sm:text-2xl font-black text-[#E60012] dark:text-[#FF5A65] font-mono tabular-nums whitespace-nowrap">
                 <SpringNumberFlow value={hybridCombinedNetTotal} suffix="원" />
               </div>
-              <span className="text-[11px] font-bold text-[#4E5968] dark:text-slate-300 break-keep">
-                일반구매 {generalSummary.displayItems.length}품목 + 구독케어 {subSummary.displayItems.length}품목 통합 기준
-              </span>
             </div>
           </div>
 
