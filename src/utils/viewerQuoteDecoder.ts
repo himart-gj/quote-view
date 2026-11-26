@@ -244,7 +244,7 @@ function unpackPlanTuple(rawPlan: any, prefix: string): GeneralPlanData {
     warrantyType:
       typeof arr[21] === 'string' && arr[21] ? arr[21] : DEFAULT_WARRANTY,
     warrantyYears: arr[13] === 3 ? 3 : 5,
-    allCare: arr[14] === 0 ? false : true,
+    allCare: Boolean(arr[14]),
     selectedCardId,
     selectedCardTierId: String(arr[16] || ''),
     hiPlusCounts: {
