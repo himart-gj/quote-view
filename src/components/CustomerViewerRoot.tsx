@@ -1458,15 +1458,17 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 w-full min-[480px]:w-auto shrink-0">
-            <a
-              href={mapSearchUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="min-h-[42px] min-w-[42px] p-2 rounded-xl bg-[#F8FAFC] dark:bg-slate-800 hover:bg-[#F2F4F6] text-[#191F28] dark:text-slate-200 border border-[#D1D6DB] dark:border-slate-700 inline-flex items-center justify-center shrink-0"
-              title="매장 위치 지도 보기"
-            >
-              <MapPin className="w-4 h-4 text-[#4E5968] dark:text-slate-300" />
-            </a>
+            {!payload.consultant.hideStoreMap && (
+              <a
+                href={mapSearchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-h-[42px] min-w-[42px] p-2 rounded-xl bg-[#F8FAFC] dark:bg-slate-800 hover:bg-[#F2F4F6] text-[#191F28] dark:text-slate-200 border border-[#D1D6DB] dark:border-slate-700 inline-flex items-center justify-center shrink-0"
+                title="매장 위치 지도 보기"
+              >
+                <MapPin className="w-4 h-4 text-[#4E5968] dark:text-slate-300" />
+              </a>
+            )}
 
             <button
               type="button"
@@ -1544,6 +1546,9 @@ export const CustomerViewerRoot: React.FC = () => {
       if (decoded) {
         setPayload(decoded);
         setStatus('ready');
+        if (typeof document !== 'undefined' && decoded.consultant?.storeName) {
+          document.title = `${decoded.consultant.storeName} 맞춤 비교 견적서`;
+        }
       } else {
         setPayload(null);
         setStatus('empty');
@@ -1568,7 +1573,7 @@ export const CustomerViewerRoot: React.FC = () => {
         </div>
         <div className="text-sm sm:text-base font-black">맞춤 견적서를 불러오는 중입니다...</div>
         <p className="text-xs text-[#8B95A1] dark:text-slate-400 font-medium mt-1">
-          롯데하이마트 경기광주점 공식 뷰어
+          롯데하이마트 공식 맞춤 견적 뷰어
         </p>
       </div>
     );
@@ -1586,7 +1591,7 @@ export const CustomerViewerRoot: React.FC = () => {
               <span className="px-2 py-0.5 rounded bg-[#E60012] text-white text-[11.5px] font-black tracking-wider">
                 LOTTE HIMART
               </span>
-              <span className="text-xs font-extrabold text-[#4E5968] dark:text-slate-300">경기광주점</span>
+              <span className="text-xs font-extrabold text-[#4E5968] dark:text-slate-300">공식 맞춤 견적 뷰어</span>
             </div>
             <h1 className="text-base sm:text-lg font-black tracking-tight dark:text-white">
               고객 전용 맞춤 견적 뷰어
@@ -1595,15 +1600,6 @@ export const CustomerViewerRoot: React.FC = () => {
               문자(SMS) 또는 카카오톡으로 전달받으신 <strong>전용 견적 링크</strong>를 눌러 접속해 주세요.
             </p>
           </div>
-          <a
-            href="https://map.naver.com/p/search/%EB%A1%AF%EB%8D%B0%ED%95%98%EC%9D%B4%EB%A7%88%ED%8A%B8%20%EA%B2%BD%EA%B8%B0%EA%B4%91%EC%A3%BC%EC%A0%90"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="min-h-[42px] w-full py-3 px-4 rounded-xl bg-[#191F28] dark:bg-blue-600 hover:bg-[#262F3D] text-white text-xs sm:text-sm font-black inline-flex items-center justify-center gap-1.5 transition"
-          >
-            <MapPin className="w-4 h-4 text-[#FF6B78] dark:text-white shrink-0" />
-            <span>롯데하이마트 경기광주점 위치 안내</span>
-          </a>
         </div>
       </div>
     );

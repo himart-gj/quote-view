@@ -23,6 +23,7 @@ export interface ConsultantProfile {
   phone: string;
   storeName: string;
   greeting: string;
+  hideStoreMap?: boolean;
 }
 
 export interface SharedQuotePayload {
@@ -276,6 +277,7 @@ export function unpackCompactQuoteV2(arr: any[]): SharedQuotePayload | null {
     roleTitle: normalizeConsultantRoleTitle(prof[2]),
     storeName: String(prof[3] || DEFAULT_STORE_NAME),
     greeting: String(prof[4] || DEFAULT_GREETING),
+    ...(prof[5] ? { hideStoreMap: true } : {}),
   };
 
   const quoteMode: QuoteMode = QUOTE_MODES[Number(arr[4]) || 0] || 'general';
@@ -425,6 +427,7 @@ export function normalizeDecodedPayload(raw: any): SharedQuotePayload | null {
       phone: String(c.phone || ''),
       storeName: String(c.storeName || DEFAULT_STORE_NAME),
       greeting: String(c.greeting || DEFAULT_GREETING),
+      ...(c.hideStoreMap ? { hideStoreMap: true } : {}),
     },
     state: finalState,
   };
