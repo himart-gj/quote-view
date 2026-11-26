@@ -12,6 +12,7 @@ import {
   getActiveCompareModes,
   getGeneralPlan1And2Summaries,
   getHiPlusUnitMonthlySupport,
+  getLottePlanQuoteMeta,
   getSubscriptionSurplusMeta,
   HI_PLUS_PLANS,
   HiPlusCounts,
@@ -600,15 +601,23 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
     }) 보고 연락드립니다.`
   );
 
+  const lottePlanMeta = useMemo(() => getLottePlanQuoteMeta(simState), [simState]);
+  const isLottePlanQuote = lottePlanMeta.isLottePlan;
+
   const validGeneralNames = generalSummary.displayItems
     .map((it) => (it.category || '').trim())
     .filter(Boolean);
-  const generalHeaderTitle =
-    validGeneralNames.length === 0
-      ? '맞춤 가전 패키지 구매 제안서'
+  const generalHeaderTitle = isLottePlanQuote
+    ? validGeneralNames.length === 0
+      ? '롯데 플랜 제휴카드 맞춤 구매 제안서'
       : validGeneralNames.length === 1
-      ? `${validGeneralNames[0]} 맞춤 구매 제안서`
-      : `${validGeneralNames[0]} 외 ${validGeneralNames.length - 1}건 맞춤 구매 제안서`;
+      ? `${validGeneralNames[0]} 롯데 플랜 맞춤 제안서`
+      : `${validGeneralNames[0]} 외 ${validGeneralNames.length - 1}건 롯데 플랜 제안서`
+    : validGeneralNames.length === 0
+    ? '맞춤 가전 패키지 구매 제안서'
+    : validGeneralNames.length === 1
+    ? `${validGeneralNames[0]} 맞춤 구매 제안서`
+    : `${validGeneralNames[0]} 외 ${validGeneralNames.length - 1}건 맞춤 구매 제안서`;
 
   const validSubNames = subSummary.displayItems
     .map((it) => (it.category || '').trim())
@@ -648,7 +657,9 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
   const hybridCombinedNetTotal = generalSummary.rawNet + subSummary.finalTotalFee;
 
   const hasGeneralSim =
-    showGeneral && (Boolean(originGeneralAffiliateCard) || !simState.hideHiPreed);
+    !isLottePlanQuote &&
+    showGeneral &&
+    (Boolean(originGeneralAffiliateCard) || !simState.hideHiPreed);
   const hasSubSim =
     showSub && (Boolean(originSubAffiliateCard) || !simState.hideSubPreed);
   const showSimulatorSection = hasGeneralSim || hasSubSim;
@@ -687,7 +698,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
 
   const { cheaperPlanNum, planDiffAmount, planTotalSubDiff } = planCompareMetrics;
   const mapSearchUrl = `https://map.naver.com/p/search/${encodeURIComponent(
-    payload.consultant.storeName || '롯데하이마트 경기광주점'
+    payload.consultant.storeName || '롯데하이마트'
   )}`;
 
   const containerMaxW = 'max-w-2xl min-[700px]:max-w-3xl lg:max-w-4xl';

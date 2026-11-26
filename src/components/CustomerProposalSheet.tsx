@@ -1,7 +1,8 @@
 import React from 'react';
-import { Check, CreditCard, Layers, ShieldCheck, ShoppingBag, Sparkles } from 'lucide-react';
+import { Check, CheckCircle2, CreditCard, Info, Layers, ShieldCheck, ShoppingBag, Sparkles } from 'lucide-react';
 import { SpringNumberFlow } from './SpringNumberFlow';
 import {
+  getLottePlanQuoteMeta,
   getSubscriptionSurplusMeta,
   getValidDisplayModelName,
   HiPlusPayoutMethod,
@@ -27,7 +28,11 @@ const isGenericSubPlaceholderCategory = (raw?: string): boolean => {
 
 const resolveWarrantyExtraText = (raw?: string): string => {
   const cleaned = sanitizeFiveYearText(raw || '').trim();
-  if (!cleaned || /^5년\s*무상\s*A\/?S(\s*기본\s*포함)?$/i.test(cleaned)) {
+  if (
+    !cleaned ||
+    /^5년\s*무상\s*A\/?S(\s*(연장보증\s*)?기본\s*포함)?$/i.test(cleaned) ||
+    /^A\/?S\s*연장\s*보험$/i.test(cleaned)
+  ) {
     return '';
   }
   return cleaned;
@@ -678,13 +683,21 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
       : []),
   ];
 
-  const step2CashbackRows: { key: string; label: string; amount: number }[] = [
+  const lottePlanMeta = getLottePlanQuoteMeta(simState);
+  const isLottePlanQuote = lottePlanMeta.isLottePlan;
+
+  const step2CashbackRows: { key: string; label: string; amount: number; badge?: string }[] = [
     ...(generalSummary.tierCashback > 0
       ? [
           {
             key: 'tier-cashback',
-            label: '금액대별 캐시백',
+            label: isLottePlanQuote
+              ? lottePlanMeta.isPlanApplied && generalSummary.tierCashback >= 60000
+                ? '롯데 플랜 기본·신청 캐시백 (기본 4만 + 플랜신청 2만)'
+                : '롯데 플랜 제휴카드 캐시백'
+              : '금액대별 캐시백',
             amount: generalSummary.tierCashback,
+            badge: '캐시백',
           },
         ]
       : []),
@@ -692,19 +705,36 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
       ? [
           {
             key: 'extra-cashback',
-            label: '배송익월 추가 캐시백',
+            label: isLottePlanQuote
+              ? '롯데 플랜 추가 캐시백'
+              : '배송익월 추가 캐시백',
             amount: generalSummary.extraCashback,
+            badge: '캐시백',
           },
         ]
       : []),
   ];
 
-  const step2ExtraRows: { key: string; label: string; amount: number }[] = [
-    ...(generalSummary.extraEtcItems || []).map((it: any, idx: number) => ({
-      key: it.id || `extra-etc-${idx}`,
-      label: (it.description || '').trim() || '추가 혜택',
-      amount: Math.max(0, Number(it.amount) || 0),
-    })),
+  const step2ExtraRows: { key: string; label: string; amount: number; badge?: string }[] = [
+    ...(generalSummary.extraEtcItems || [])
+      .filter((it: any) => (Number(it.amount) || 0) > 0)
+      .map((it: any, idx: number) => {
+        const desc = (it.description || '').trim() || '추가 혜택';
+        const isBillingRow = /청구할인|선할인/.test(desc);
+        const isPointRow = /롤라머니|적립/.test(desc);
+        return {
+          key: it.id || `extra-etc-${idx}`,
+          label: desc,
+          amount: Math.max(0, Number(it.amount) || 0),
+          badge: isLottePlanQuote
+            ? isBillingRow
+              ? '청구할인'
+              : isPointRow
+              ? '적립환급'
+              : '카드혜택'
+            : undefined,
+        };
+      }),
     ...(generalSummary.remainingPoints > 0
       ? [
           {
@@ -770,7 +800,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                   LOTTE HIMART
                 </span>
                 <span className="text-[11px] font-extrabold text-[#4E5968] dark:text-slate-300">
-                  공식 맞춤 제안서
+                  {isLottePlanQuote ? '롯데 플랜 맞춤 제안서' : '공식 맞춤 제안서'}
                 </span>
                 {hasBothPlans && (
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-[#191F28] dark:bg-blue-600 text-white text-[11px] font-extrabold">
@@ -785,8 +815,12 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#F8FAFC] dark:bg-slate-800/80 border border-[#E5E8EB] dark:border-slate-700 text-[11px] sm:text-xs font-extrabold text-[#191F28] dark:text-slate-100 max-w-full break-keep">
               <CreditCard className="w-3.5 h-3.5 text-[#1B64DA] dark:text-blue-400 shrink-0" />
               <span>
-                {simState.generalCardType === '미정' ||
-                simState.generalCardType === '일반카드'
+                {isLottePlanQuote
+                  ? lottePlanMeta.isPlanApplied
+                    ? `롯데 플랜 카드 (월 ${lottePlanMeta.spendManwon}만 × ${lottePlanMeta.months}개월)`
+                    : '롯데 플랜 제휴카드 (기본형)'
+                  : simState.generalCardType === '미정' ||
+                    simState.generalCardType === '일반카드'
                   ? '제휴카드 미적용'
                   : simState.generalCardType}
               </span>
@@ -840,7 +874,9 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                   <SpringNumberFlow value={generalSummary.rawNet} suffix="원" />
                 </div>
                 <div className="text-[11px] font-bold text-[#4E5968] dark:text-slate-300 break-keep">
-                  ① 실결제가 − ② 사후 환급 혜택
+                  {isLottePlanQuote
+                    ? '① 카드 실결제가 − ② 롯데 플랜 총 혜택'
+                    : '① 실결제가 − ② 사후 환급 혜택'}
                 </div>
               </div>
             </div>
@@ -849,7 +885,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
             <div className="grid grid-cols-2 mobile-keep-grid gap-2">
               <div className="min-w-0 rounded-xl bg-[#191F28] dark:bg-slate-900 border border-transparent dark:border-slate-700 text-white px-3 py-2.5 flex flex-col justify-between">
                 <span className="text-[10.5px] font-extrabold text-slate-300 break-keep">
-                  ① 오늘 매장 실결제가
+                  {isLottePlanQuote ? '① 롯데 플랜 카드 실결제가' : '① 오늘 매장 실결제가'}
                 </span>
                 <div className="mt-1 text-[clamp(0.95rem,4vw,1.25rem)] font-black tracking-tight font-mono tabular-nums whitespace-nowrap">
                   <SpringNumberFlow value={generalSummary.payPrice} suffix="원" />
@@ -863,13 +899,17 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
 
               <div className="min-w-0 rounded-xl bg-[#EFF6FF] dark:bg-blue-950/40 border border-[#BFDBFE] dark:border-blue-800/60 px-3 py-2.5 flex flex-col justify-between">
                 <span className="text-[10.5px] font-extrabold text-[#1B64DA] dark:text-blue-300 break-keep">
-                  ② 사후 환급 혜택
+                  {isLottePlanQuote ? '② 롯데 플랜 총 카드 혜택' : '② 사후 환급 혜택'}
                 </span>
                 <div className="mt-1 text-[clamp(0.95rem,4vw,1.25rem)] font-black tracking-tight text-[#1B64DA] dark:text-blue-400 font-mono tabular-nums whitespace-nowrap">
                   {step2TotalRefund > 0 ? `-${step2TotalRefund.toLocaleString()}원` : '0원'}
                 </div>
                 <div className="text-[10px] font-semibold text-[#4E5968] dark:text-slate-300 mt-0.5 truncate">
-                  {step2TotalRefund > 0 ? '캐시백·포인트 환급' : '현장 차감 중심'}
+                  {isLottePlanQuote
+                    ? '청구할인·캐시백·롤라머니'
+                    : step2TotalRefund > 0
+                    ? '캐시백·포인트 환급'
+                    : '현장 차감 중심'}
                 </div>
               </div>
             </div>
@@ -940,7 +980,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                   STEP 2
                 </span>
                 <span className="text-xs font-extrabold text-[#191F28] dark:text-slate-100 break-keep">
-                  단계별 혜택 차감 순서
+                  {isLottePlanQuote ? '롯데 플랜 제휴카드 혜택 상세' : '단계별 혜택 차감 순서'}
                 </span>
               </div>
               {generalSummary.totalDiscountAndBenefit > 0 && (
@@ -988,7 +1028,7 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
 
               <div className="ledger-row px-3.5 sm:px-4 py-2.5 bg-[#F8FAFC] dark:bg-slate-800/70">
                 <span className="ledger-row-label text-xs sm:text-sm font-black text-[#191F28] dark:text-white">
-                  ① 오늘 매장 카드 실결제가
+                  {isLottePlanQuote ? '① 롯데 플랜 제휴카드 실결제가' : '① 오늘 매장 카드 실결제가'}
                 </span>
                 <span className="ledger-row-value text-sm sm:text-base font-black text-[#191F28] dark:text-white font-mono tabular-nums whitespace-nowrap">
                   <SpringNumberFlow value={generalSummary.payPrice} suffix="원" />
@@ -999,9 +1039,9 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
                 <div key={row.key} className="ledger-row px-3.5 sm:px-4 py-2.5">
                   <div className="ledger-row-label flex items-center gap-1.5">
                     <span className="px-1.5 py-0.5 rounded bg-[#FFF1F2] dark:bg-rose-950/50 border border-[#FECDD3] dark:border-rose-800 text-[#E60012] dark:text-rose-300 text-[11px] font-extrabold shrink-0">
-                      사후환급
+                      {row.badge || '사후환급'}
                     </span>
-                    <span className="text-[12.5px] sm:text-sm font-bold text-[#191F28] dark:text-slate-100">
+                    <span className="text-[12.5px] sm:text-sm font-bold text-[#191F28] dark:text-slate-100 break-keep">
                       {row.label}
                     </span>
                   </div>
@@ -1028,6 +1068,68 @@ export const CustomerProposalSheet: React.FC<Record<string, any>> = ({
               </div>
             </div>
           </div>
+
+          {/* 롯데 플랜 제휴카드 필수 고객 안내사항 (롯데 플랜 공유 견적서 전용) */}
+          {isLottePlanQuote && (
+            <div className="rounded-2xl bg-[#191F28] dark:bg-slate-900 border border-slate-800 text-white p-4 sm:p-5 space-y-3">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                <Info className="w-4 h-4 text-blue-300 shrink-0" />
+                <h3 className="text-xs sm:text-sm font-black text-white">
+                  📌 롯데 플랜 제휴카드 필수 안내사항
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs leading-relaxed">
+                <div className="p-3 rounded-xl bg-slate-800/90 border border-slate-700 space-y-1">
+                  <div className="font-black text-emerald-300 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>캐시백 입금 시기</span>
+                  </div>
+                  <p className="text-slate-200 font-bold break-keep">
+                    <strong className="text-white underline underline-offset-2">
+                      결제일 다음 달 말일
+                    </strong>{' '}
+                    입금
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-800/90 border border-slate-700 space-y-1">
+                  <div className="font-black text-blue-300 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>롤라머니 적립 시기</span>
+                  </div>
+                  <p className="text-slate-200 font-bold break-keep">
+                    <strong className="text-white underline underline-offset-2">
+                      결제 후 일주일 이내
+                    </strong>{' '}
+                    적립
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-800/90 border border-slate-700 space-y-1">
+                  <div className="font-black text-emerald-300 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>롤라머니 현금교환 방법</span>
+                  </div>
+                  <p className="text-blue-200 font-black break-keep">
+                    로카앱 &gt; 포인트·캐시백 메뉴 &gt; 롤라머니 캐시백
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-800/90 border border-slate-700 space-y-1">
+                  <div className="font-black text-blue-300 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>플랜 월 사용금액 산정 기간</span>
+                  </div>
+                  <p className="text-slate-200 font-bold break-keep">
+                    {lottePlanMeta.isPlanApplied
+                      ? `약정하신 월 사용금액(월 ${lottePlanMeta.spendManwon}만원 이상)은 `
+                      : '플랜 서비스 신청 시 약정 월 사용금액은 '}
+                    <strong className="text-white underline underline-offset-2">
+                      결제 다음 달부터 매월 1일 ~ 말일까지
+                    </strong>{' '}
+                    기준으로 산정됩니다.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 6. STEP 3 · 만기 100% 환급 보증 */}
           {!simState.hideHiPreed && generalHiPreed.totalAccounts > 0 && (

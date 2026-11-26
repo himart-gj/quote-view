@@ -50,7 +50,7 @@ export function normalizeConsultantRoleTitle(raw?: string | null): string {
 }
 const DEFAULT_GREETING =
   '고객님 가계에 가장 유리한 플랜을 직접 비교해 보시고 편하게 연락 주세요!';
-const DEFAULT_WARRANTY = 'AS연장보험 + 가전수리올케어';
+const DEFAULT_WARRANTY = 'AS연장보험';
 
 const COMMON_CATEGORIES = [
   '냉장고',

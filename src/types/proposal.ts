@@ -350,9 +350,9 @@ export function extractGeneralPlanData(
     })),
     subscriptionPeriod: normalizeSubscriptionPeriod(s.subscriptionPeriod, 60),
     careService: s.careService || SUB_CARE_OPTIONS[0],
-    warrantyType: s.warrantyType || 'AS연장보험 + 가전수리올케어',
+    warrantyType: s.warrantyType || 'AS연장보험',
     warrantyYears: 5,
-    allCare: s.allCare ?? true,
+    allCare: s.allCare ?? false,
     selectedCardId: s.selectedCardId || 'none',
     selectedCardTierId: s.selectedCardTierId || '',
     hiPlusCounts: {
@@ -416,9 +416,9 @@ export function cloneGeneralPlanData(
     })),
     subscriptionPeriod: normalizeSubscriptionPeriod(source.subscriptionPeriod, 60),
     careService: source.careService || SUB_CARE_OPTIONS[0],
-    warrantyType: source.warrantyType || 'AS연장보험 + 가전수리올케어',
+    warrantyType: source.warrantyType || 'AS연장보험',
     warrantyYears: 5,
-    allCare: source.allCare ?? true,
+    allCare: source.allCare ?? false,
     selectedCardId: source.selectedCardId || 'none',
     selectedCardTierId: source.selectedCardTierId || '',
     hiPlusCounts: {
@@ -2041,9 +2041,9 @@ export const createEmptyGeneralPlanData = (
   ],
   subscriptionPeriod: 60,
   careService: SUB_CARE_OPTIONS[0],
-  warrantyType: "AS연장보험 + 가전수리올케어",
+  warrantyType: "AS연장보험",
   warrantyYears: 5,
-  allCare: true,
+  allCare: false,
   selectedCardId: "none",
   selectedCardTierId: "",
   hiPlusCounts: {
@@ -2147,7 +2147,7 @@ export function buildProposalStateFromHisisSlip(
               period,
               careService: it.careService || SUB_CARE_OPTIONS[0],
               careType: it.careService || SUB_CARE_OPTIONS[0],
-              warrantyType: it.warrantyType || 'AS연장보험 + 가전수리올케어',
+              warrantyType: it.warrantyType || 'AS연장보험',
             };
           })
         : base.generalPlan1.items;
@@ -2162,10 +2162,13 @@ export function buildProposalStateFromHisisSlip(
       items: builtSubItems,
       subscriptionPeriod: repPeriod,
       careService: builtSubItems[0]?.careService || SUB_CARE_OPTIONS[0],
-      warrantyType:
-        builtSubItems[0]?.warrantyType || 'AS연장보험 + 가전수리올케어',
+      warrantyType: builtSubItems[0]?.warrantyType || 'AS연장보험',
       warrantyYears: 5,
-      allCare: true,
+      allCare: Boolean(
+        builtSubItems.some((it) =>
+          (it.warrantyType || '').includes('가전수리올케어')
+        )
+      ),
       selectedCardId: 'none',
       selectedCardTierId: '',
       subAutoTierCashback: false,
@@ -2262,4 +2265,166 @@ export function buildProposalStateFromHisisSlip(
     generalPlan1: plan1,
     ...plan1,
   };
+}
+
+export interface LottePlanQuoteBuildInput {
+  items: {
+    id?: string;
+    category: string;
+    modelName: string;
+    quantity: number;
+    unitPrice: number;
+  }[];
+  instantDiscount: number;
+  lpointUsed: number;
+  extraCashback: number;
+  baseCashback40k: number;
+  planExtraCashback20k: number;
+  billingDiscount5p: number;
+  lolaMoney3p: number;
+  planPreDiscount: number;
+  isPlanServiceApplied: boolean;
+  selectedSpend: number;
+  selectedMonths: number;
+}
+
+export interface LottePlanQuoteMeta {
+  isLottePlan: boolean;
+  isPlanApplied: boolean;
+  spendManwon: number;
+  months: number;
+}
+
+export function buildProposalStateFromLottePlan(
+  input: LottePlanQuoteBuildInput
+): ProposalState {
+  const base = createInitialState('general');
+  const rawItems = Array.isArray(input.items) ? input.items : [];
+  const generalItems: GeneralPurchaseItem[] =
+    rawItems.length > 0
+      ? rawItems.map((it, idx) => {
+          const qty = Math.max(1, Math.round(Number(it.quantity) || 1));
+          const unitPrice = Math.max(0, Math.round(Number(it.unitPrice) || 0));
+          const cleanCat = (it.category || '').trim() || `가전품목 ${idx + 1}`;
+          const cleanModel = (it.modelName || '').trim();
+          return {
+            id: it.id || `lp-item-${idx + 1}`,
+            category: cleanCat,
+            modelName: cleanModel,
+            code: cleanModel,
+            name: cleanCat,
+            quantity: qty,
+            qty,
+            unitPrice,
+            price: unitPrice * qty,
+            discount1: 0,
+            discount2: 0,
+            cashback: 0,
+          };
+        })
+      : base.generalPlan1.generalItems;
+
+  const extraBenefits: GeneralExtraBenefitItem[] = [];
+  const planDescSuffix = `(월 ${input.selectedSpend}만원 × ${input.selectedMonths}개월 약정)`;
+
+  if (input.isPlanServiceApplied) {
+    if (input.planPreDiscount > 0) {
+      extraBenefits.push({
+        id: 'lp-plan',
+        type: 'etc',
+        description: `롯데 플랜 선할인 ${planDescSuffix}`,
+        amount: Math.max(0, Math.round(input.planPreDiscount)),
+      });
+    } else {
+      extraBenefits.push({
+        id: 'lp-meta',
+        type: 'etc',
+        description: `롯데 플랜 약정 ${planDescSuffix}`,
+        amount: 0,
+      });
+    }
+  }
+
+  if (input.billingDiscount5p > 0) {
+    extraBenefits.push({
+      id: 'lp-b5p',
+      type: 'etc',
+      description: '롯데 플랜 5% 청구할인 (최대 5만원)',
+      amount: Math.max(0, Math.round(input.billingDiscount5p)),
+    });
+  }
+
+  if (input.lolaMoney3p > 0) {
+    extraBenefits.push({
+      id: 'lp-lola',
+      type: 'etc',
+      description: '롯데 플랜 3% 롤라머니 적립 (로카앱 현금교환)',
+      amount: Math.max(0, Math.round(input.lolaMoney3p)),
+    });
+  }
+
+  if (extraBenefits.length === 0) {
+    extraBenefits.push({
+      id: 'lp-meta',
+      type: 'etc',
+      description: '롯데 플랜 제휴카드 (기본 혜택형)',
+      amount: 0,
+    });
+  }
+
+  const tierCb =
+    Math.max(0, Math.round(input.baseCashback40k || 0)) +
+    Math.max(0, Math.round(input.planExtraCashback20k || 0));
+
+  const plan1: GeneralPlanData = {
+    ...base.generalPlan1,
+    generalItems,
+    generalCardType: '롯데 제휴카드',
+    instantDiscount: Math.max(0, Math.round(input.instantDiscount || 0)),
+    earnedPoints: 0,
+    pointUsed: Math.max(0, Math.round(input.lpointUsed || 0)),
+    autoTierCashback: false,
+    manualTierCashback: tierCb,
+    extraCashback: Math.max(0, Math.round(input.extraCashback || 0)),
+    extraBenefits,
+    generalHiPreedCounts: { hf75: 0, hf150: 0, hf225: 0, hf300: 0 },
+    hideHiPreed: true,
+    hideSubPreed: true,
+  };
+
+  return {
+    ...base,
+    quoteMode: 'general',
+    activeGeneralPlan: 1,
+    generalPlans: [plan1],
+    generalPlan1: plan1,
+    ...plan1,
+  };
+}
+
+export function getLottePlanQuoteMeta(
+  state?: Partial<ProposalState> | null
+): LottePlanQuoteMeta {
+  if (!state || state.quoteMode !== 'general') {
+    return { isLottePlan: false, isPlanApplied: false, spendManwon: 0, months: 0 };
+  }
+  const descs = (state.extraBenefits || []).map((b) =>
+    (b?.description || '').trim()
+  );
+  const isLottePlan = descs.some((d) => /^롯데\s*플랜/.test(d));
+  if (!isLottePlan) {
+    return { isLottePlan: false, isPlanApplied: false, spendManwon: 0, months: 0 };
+  }
+  for (const d of descs) {
+    const m = d.match(/월\s*(\d+)\s*만원\s*[×x*]\s*(\d+)\s*개월/);
+    if (m) {
+      return {
+        isLottePlan: true,
+        isPlanApplied: true,
+        spendManwon: Number(m[1]) || 0,
+        months: Number(m[2]) || 0,
+      };
+    }
+  }
+  return { isLottePlan: true, isPlanApplied: false, spendManwon: 0, months: 0 };
 }

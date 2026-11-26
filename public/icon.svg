@@ -202,11 +202,11 @@
       <path d="M12,14 L80,14 L76,24 L16,24 Z" fill="url(#goldHorizontal)"/>
     </g>
 
-    <!-- 5. 엠블럼 하단 텍스트 배지 (국지 CRM & 가전 견적) -->
+    <!-- 5. 엠블럼 하단 텍스트 배지 (SMART CRM & 가전 견적) -->
     <g transform="translate(256, 436)">
       <rect x="-90" y="-16" width="180" height="32" rx="16" fill="#071126" stroke="url(#goldBorder)" stroke-width="1.8"/>
-      <text x="0" y="5" font-family="'Pretendard', -apple-system, sans-serif" font-weight="900" font-size="13" fill="url(#goldLight)" text-anchor="middle" letter-spacing="3">
-        KUKJI CRM
+      <text x="0" y="5" font-family="'Plus Jakarta Sans', 'Pretendard', -apple-system, sans-serif" font-weight="900" font-size="13" fill="url(#goldLight)" text-anchor="middle" letter-spacing="3">
+        SMART CRM
       </text>
     </g>
 
