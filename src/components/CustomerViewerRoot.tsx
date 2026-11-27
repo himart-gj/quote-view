@@ -34,10 +34,13 @@ import {
 } from '../utils/viewerQuoteDecoder';
 import { SpringNumberFlow } from './SpringNumberFlow';
 import { CustomerProposalSheet } from './CustomerProposalSheet';
+import { ProposalPreviewFreedGuide } from './ProposalPreviewFreedGuide';
 import { UnifiedComplianceAccordion } from './ProposalComplianceBlocks';
 import { safeCopyText, scrollToTopInstant } from '../utils/mobileQaRuntime';
 import {
   ArrowDown,
+  ArrowUp,
+  BookOpen,
   Check,
   ChevronDown,
   ChevronUp,
@@ -220,6 +223,8 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
   const [showCustomControls, setShowCustomControls] = useState<boolean>(false);
   const [copiedShareLink, setCopiedShareLink] = useState<boolean>(false);
   const simulatorRef = useRef<HTMLElement | null>(null);
+  const freedGuideSectionRef = useRef<HTMLElement | null>(null);
+  const [hybridGuideTab, setHybridGuideTab] = useState<'guide-general' | 'guide-sub'>('guide-general');
   const pendingSimAnchorTopRef = useRef<number | null>(null);
 
   const handleShareOrCopyLink = async () => {
@@ -664,6 +669,28 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
     showSub && (Boolean(originSubAffiliateCard) || !simState.hideSubPreed);
   const showSimulatorSection = hasGeneralSim || hasSubSim;
 
+  const hasActiveGenPreedGuide =
+    showGeneral &&
+    !simState.hideHiPreed &&
+    !isLottePlanQuote &&
+    generalHiPreed.totalAccounts > 0;
+  const hasActiveSubPreedGuide =
+    showSub && !simState.hideSubPreed && hiPlusSummary.totalAccounts > 0;
+  const hasAnyActivePreedGuide =
+    hasActiveGenPreedGuide || hasActiveSubPreedGuide;
+  const effectiveFreedGuideTab: 'guide-general' | 'guide-sub' =
+    hasActiveGenPreedGuide && hasActiveSubPreedGuide
+      ? hybridGuideTab
+      : hasActiveSubPreedGuide
+      ? 'guide-sub'
+      : 'guide-general';
+  const activePreedGuideTitle =
+    hasActiveGenPreedGuide && hasActiveSubPreedGuide
+      ? '하이프리드 · Hi구독 플러스 안내서'
+      : hasActiveSubPreedGuide
+      ? 'Hi구독 플러스 안내서'
+      : '하이프리드 안내서';
+
   const planCompareMetrics = useMemo(() => {
     if (validSharePlans.length < 2) {
       return { cheaperPlanNum: 0, planDiffAmount: 0, planTotalSubDiff: 0 };
@@ -917,6 +944,43 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
           </div>
         )}
 
+        {/* 프리드 포함 견적 시 상단 동봉 안내서 바로보기 배너 */}
+        {hasAnyActivePreedGuide && (
+          <div className="no-print rounded-xl sm:rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/35 border border-emerald-200 dark:border-emerald-700/60 px-3 py-2 sm:px-4 sm:py-2.5 flex items-center justify-between gap-2 shadow-[0_1px_6px_rgba(16,185,129,0.06)]">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                <BookOpen className="w-3.5 h-3.5" />
+              </span>
+              <div className="min-w-0 leading-tight">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-black whitespace-nowrap">
+                    함께 동봉됨
+                  </span>
+                  <span className="text-xs sm:text-[13px] font-black text-emerald-950 dark:text-emerald-100 break-keep">
+                    웅진프리드라이프 {activePreedGuideTitle}
+                  </span>
+                </div>
+                <p className="text-[11px] font-semibold text-emerald-800/90 dark:text-emerald-200/80 mt-0.5 break-keep">
+                  만기 100% 환급 구조 · 8대 전환 서비스 · 리조트/검진 멤버십 우대 안내
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                freedGuideSectionRef.current?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'start',
+                });
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0 transition cursor-pointer shadow-2xs"
+            >
+              <span>안내서 보기</span>
+              <ArrowDown className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
         {/* 메인 고객 스토리 제안서 시트 */}
         <CustomerProposalSheet
           activePlan={effectivePlanNum}
@@ -941,6 +1005,70 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
           subHeaderTitle={subHeaderTitle}
           subSummary={subSummary}
         />
+
+        {/* [동봉 안내서] 프리드 포함 시 자동으로 함께 표시되는 웅진프리드라이프 제휴 혜택 안내서 */}
+        {hasAnyActivePreedGuide && (
+          <section
+            id="customer-freed-guide-section"
+            ref={freedGuideSectionRef}
+            className="scroll-mt-16 space-y-2"
+          >
+            <div className="no-print flex flex-wrap items-center justify-between gap-2 px-1 pt-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <BookOpen className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="text-xs sm:text-sm font-black text-[#191F28] dark:text-white break-keep">
+                  동봉 안내서 · 웅진프리드라이프 제휴 혜택 상세
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {hasActiveGenPreedGuide && hasActiveSubPreedGuide && (
+                  <div className="inline-flex items-center p-0.5 rounded-lg bg-white dark:bg-[#131C2E] border border-[#D1D6DB] dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setHybridGuideTab('guide-general')}
+                      className={`px-2 py-1 rounded-md text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap ${
+                        effectiveFreedGuideTab === 'guide-general'
+                          ? 'bg-[#191F28] dark:bg-blue-600 text-white'
+                          : 'text-[#4E5968] dark:text-slate-300'
+                      }`}
+                    >
+                      하이프리드 ({generalHiPreed.totalAccounts}건)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHybridGuideTab('guide-sub')}
+                      className={`px-2 py-1 rounded-md text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap ${
+                        effectiveFreedGuideTab === 'guide-sub'
+                          ? 'bg-[#191F28] dark:bg-blue-600 text-white'
+                          : 'text-[#4E5968] dark:text-slate-300'
+                      }`}
+                    >
+                      Hi구독 플러스 ({hiPlusSummary.totalAccounts}구좌)
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => scrollToTopInstant()}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white dark:bg-[#131C2E] border border-[#D1D6DB] dark:border-slate-700 text-[11px] font-bold text-[#4E5968] dark:text-slate-300 cursor-pointer whitespace-nowrap"
+                >
+                  <ArrowUp className="w-3 h-3" />
+                  <span>견적서 상단</span>
+                </button>
+              </div>
+            </div>
+
+            <ProposalPreviewFreedGuide
+              activeTab={effectiveFreedGuideTab}
+              guideGeneralSummary={generalHiPreed}
+              guideHiSummary={hiPlusSummary}
+              isGuideTab={true}
+              representativePeriod={subSummary.representativePeriod}
+              scale={1}
+              useMobileFluid={true}
+            />
+          </section>
+        )}
 
         {/* [블록 4] 원클릭 조건 비교 시뮬레이터 */}
         {showSimulatorSection && (
