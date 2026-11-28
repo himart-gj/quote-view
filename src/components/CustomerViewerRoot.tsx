@@ -39,7 +39,6 @@ import { UnifiedComplianceAccordion } from './ProposalComplianceBlocks';
 import { safeCopyText, scrollToTopInstant } from '../utils/mobileQaRuntime';
 import {
   ArrowDown,
-  ArrowUp,
   BookOpen,
   Check,
   ChevronDown,
@@ -57,6 +56,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   UserCheck,
+  X,
 } from 'lucide-react';
 
 interface MultiModeTabSwitcherBannerProps {
@@ -223,8 +223,22 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
   const [showCustomControls, setShowCustomControls] = useState<boolean>(false);
   const [copiedShareLink, setCopiedShareLink] = useState<boolean>(false);
   const simulatorRef = useRef<HTMLElement | null>(null);
-  const freedGuideSectionRef = useRef<HTMLElement | null>(null);
+  const [isFreedGuideModalOpen, setIsFreedGuideModalOpen] = useState<boolean>(false);
   const [hybridGuideTab, setHybridGuideTab] = useState<'guide-general' | 'guide-sub'>('guide-general');
+
+  useEffect(() => {
+    if (!isFreedGuideModalOpen || typeof document === 'undefined') return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsFreedGuideModalOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isFreedGuideModalOpen]);
   const pendingSimAnchorTopRef = useRef<number | null>(null);
 
   const handleShareOrCopyLink = async () => {
@@ -781,7 +795,7 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
       </header>
 
       <main className={`${containerMaxW} mx-auto px-2.5 sm:px-5 pt-2 sm:pt-3 space-y-2.5 sm:space-y-3.5`}>
-        {/* 담당 컨설턴트 컨시어지 바 + 시뮬레이터 바로가기 (컴팩트 압축) */}
+        {/* 담당 컨설턴트 컨시어지 바 + 프리드 안내서 팝업 · 시뮬레이터 바로가기 */}
         <div className="no-print rounded-xl sm:rounded-2xl bg-white dark:bg-[#131C2E] border border-[#E5E8EB] dark:border-slate-700/80 shadow-[0_1px_6px_rgba(25,31,40,0.03)] px-3 py-2 sm:px-4 sm:py-2.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <div className="w-8 h-8 rounded-lg bg-[#191F28] dark:bg-slate-800 text-white font-black text-xs flex items-center justify-center shrink-0">
@@ -804,22 +818,34 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
             </div>
           </div>
 
-          {showSimulatorSection && (
-            <button
-              type="button"
-              onClick={() => {
-                simulatorRef.current?.scrollIntoView({
-                  behavior: 'smooth',
-                  block: 'start',
-                });
-              }}
-              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg bg-[#EFF6FF] dark:bg-blue-950/60 hover:bg-[#DBEAFE] border border-[#BFDBFE] dark:border-blue-800 text-[#1B64DA] dark:text-blue-300 text-[11px] font-extrabold whitespace-nowrap shrink-0 transition cursor-pointer"
-            >
-              <SlidersHorizontal className="w-3 h-3 text-[#1B64DA] dark:text-blue-400" />
-              <span>조건 비교</span>
-              <ArrowDown className="w-3 h-3 text-[#1B64DA] dark:text-blue-400" />
-            </button>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+            {hasAnyActivePreedGuide && (
+              <button
+                type="button"
+                onClick={() => setIsFreedGuideModalOpen(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0 transition cursor-pointer shadow-2xs schedule-tactile"
+              >
+                <BookOpen className="w-3 h-3 shrink-0" />
+                <span>프리드 안내서</span>
+              </button>
+            )}
+            {showSimulatorSection && (
+              <button
+                type="button"
+                onClick={() => {
+                  simulatorRef.current?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                  });
+                }}
+                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg bg-[#EFF6FF] dark:bg-blue-950/60 hover:bg-[#DBEAFE] border border-[#BFDBFE] dark:border-blue-800 text-[#1B64DA] dark:text-blue-300 text-[11px] font-extrabold whitespace-nowrap shrink-0 transition cursor-pointer"
+              >
+                <SlidersHorizontal className="w-3 h-3 text-[#1B64DA] dark:text-blue-400" />
+                <span>조건 비교</span>
+                <ArrowDown className="w-3 h-3 text-[#1B64DA] dark:text-blue-400" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 복수 구매방식 비교 탭 */}
@@ -944,43 +970,6 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
           </div>
         )}
 
-        {/* 프리드 포함 견적 시 상단 동봉 안내서 바로보기 배너 */}
-        {hasAnyActivePreedGuide && (
-          <div className="no-print rounded-xl sm:rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/35 border border-emerald-200 dark:border-emerald-700/60 px-3 py-2 sm:px-4 sm:py-2.5 flex items-center justify-between gap-2 shadow-[0_1px_6px_rgba(16,185,129,0.06)]">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                <BookOpen className="w-3.5 h-3.5" />
-              </span>
-              <div className="min-w-0 leading-tight">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-black whitespace-nowrap">
-                    함께 동봉됨
-                  </span>
-                  <span className="text-xs sm:text-[13px] font-black text-emerald-950 dark:text-emerald-100 break-keep">
-                    웅진프리드라이프 {activePreedGuideTitle}
-                  </span>
-                </div>
-                <p className="text-[11px] font-semibold text-emerald-800/90 dark:text-emerald-200/80 mt-0.5 break-keep">
-                  만기 100% 환급 구조 · 8대 전환 서비스 · 리조트/검진 멤버십 우대 안내
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                freedGuideSectionRef.current?.scrollIntoView({
-                  behavior: 'smooth',
-                  block: 'start',
-                });
-              }}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold whitespace-nowrap shrink-0 transition cursor-pointer shadow-2xs"
-            >
-              <span>안내서 보기</span>
-              <ArrowDown className="w-3 h-3" />
-            </button>
-          </div>
-        )}
-
         {/* 메인 고객 스토리 제안서 시트 */}
         <CustomerProposalSheet
           activePlan={effectivePlanNum}
@@ -1005,70 +994,6 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
           subHeaderTitle={subHeaderTitle}
           subSummary={subSummary}
         />
-
-        {/* [동봉 안내서] 프리드 포함 시 자동으로 함께 표시되는 웅진프리드라이프 제휴 혜택 안내서 */}
-        {hasAnyActivePreedGuide && (
-          <section
-            id="customer-freed-guide-section"
-            ref={freedGuideSectionRef}
-            className="scroll-mt-16 space-y-2"
-          >
-            <div className="no-print flex flex-wrap items-center justify-between gap-2 px-1 pt-1">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <BookOpen className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span className="text-xs sm:text-sm font-black text-[#191F28] dark:text-white break-keep">
-                  동봉 안내서 · 웅진프리드라이프 제휴 혜택 상세
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {hasActiveGenPreedGuide && hasActiveSubPreedGuide && (
-                  <div className="inline-flex items-center p-0.5 rounded-lg bg-white dark:bg-[#131C2E] border border-[#D1D6DB] dark:border-slate-700">
-                    <button
-                      type="button"
-                      onClick={() => setHybridGuideTab('guide-general')}
-                      className={`px-2 py-1 rounded-md text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap ${
-                        effectiveFreedGuideTab === 'guide-general'
-                          ? 'bg-[#191F28] dark:bg-blue-600 text-white'
-                          : 'text-[#4E5968] dark:text-slate-300'
-                      }`}
-                    >
-                      하이프리드 ({generalHiPreed.totalAccounts}건)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setHybridGuideTab('guide-sub')}
-                      className={`px-2 py-1 rounded-md text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap ${
-                        effectiveFreedGuideTab === 'guide-sub'
-                          ? 'bg-[#191F28] dark:bg-blue-600 text-white'
-                          : 'text-[#4E5968] dark:text-slate-300'
-                      }`}
-                    >
-                      Hi구독 플러스 ({hiPlusSummary.totalAccounts}구좌)
-                    </button>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => scrollToTopInstant()}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white dark:bg-[#131C2E] border border-[#D1D6DB] dark:border-slate-700 text-[11px] font-bold text-[#4E5968] dark:text-slate-300 cursor-pointer whitespace-nowrap"
-                >
-                  <ArrowUp className="w-3 h-3" />
-                  <span>견적서 상단</span>
-                </button>
-              </div>
-            </div>
-
-            <ProposalPreviewFreedGuide
-              activeTab={effectiveFreedGuideTab}
-              guideGeneralSummary={generalHiPreed}
-              guideHiSummary={hiPlusSummary}
-              isGuideTab={true}
-              representativePeriod={subSummary.representativePeriod}
-              scale={1}
-              useMobileFluid={true}
-            />
-          </section>
-        )}
 
         {/* [블록 4] 원클릭 조건 비교 시뮬레이터 */}
         {showSimulatorSection && (
@@ -1125,13 +1050,13 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
                       isNoCardPresetActive
                         ? 'bg-[#191F28] dark:bg-blue-600 text-white border-[#191F28] dark:border-blue-500 shadow-2xs'
                         : 'bg-[#F8FAFC] dark:bg-slate-800/70 text-[#4E5968] dark:text-slate-300 border-[#D1D6DB] dark:border-slate-700 hover:border-[#1B64DA]/50'
-                    }`}
-                  >
-                    {isNoCardPresetActive && (
-                      <Check className="w-3.5 h-3.5 text-emerald-300 shrink-0 stroke-[3]" />
-                    )}
-                    <span>제휴카드 미적용 시</span>
-                  </button>
+                  }`}
+                >
+                  {isNoCardPresetActive && (
+                    <Check className="w-3.5 h-3.5 text-emerald-300 shrink-0 stroke-[3]" />
+                  )}
+                  <span>제휴카드 미적용 시</span>
+                </button>
                 )}
 
                 <button
@@ -1526,6 +1451,97 @@ export const CustomerShareQuoteView: React.FC<CustomerShareQuoteViewProps> = ({
           </div>
         )}
       </main>
+
+      {/* 프리드 안내서 전용 팝업 모달 */}
+      {isFreedGuideModalOpen && hasAnyActivePreedGuide && (
+        <div
+          className="no-print fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setIsFreedGuideModalOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`웅진프리드라이프 ${activePreedGuideTitle}`}
+        >
+          <div
+            className="w-full sm:max-w-3xl max-h-[92dvh] sm:max-h-[88dvh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-[#F2F4F6] dark:bg-[#0B1120] border border-[#D1D6DB] dark:border-slate-700 border-t-[4px] border-t-emerald-600 shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 bg-white dark:bg-[#131C2E] border-b border-[#E5E8EB] dark:border-slate-800 flex items-center justify-between gap-2 shrink-0 flex-wrap">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                  <BookOpen className="w-3.5 h-3.5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-xs sm:text-sm font-black text-[#191F28] dark:text-white break-keep leading-snug">
+                    웅진프리드라이프 {activePreedGuideTitle}
+                  </div>
+                  <div className="text-[11px] font-semibold text-[#8B95A1] dark:text-slate-400 truncate">
+                    만기 100% 환급 구조 · 8대 전환 서비스 · 멤버십 우대 안내
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                {hasActiveGenPreedGuide && hasActiveSubPreedGuide && (
+                  <div className="inline-flex items-center p-0.5 rounded-lg bg-[#F2F4F6] dark:bg-[#0B1120] border border-[#D1D6DB] dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setHybridGuideTab('guide-general')}
+                      className={`px-2 py-1 rounded-md text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap ${
+                        effectiveFreedGuideTab === 'guide-general'
+                          ? 'bg-[#191F28] dark:bg-blue-600 text-white'
+                          : 'text-[#4E5968] dark:text-slate-300'
+                      }`}
+                    >
+                      하이프리드 ({generalHiPreed.totalAccounts}건)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHybridGuideTab('guide-sub')}
+                      className={`px-2 py-1 rounded-md text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap ${
+                        effectiveFreedGuideTab === 'guide-sub'
+                          ? 'bg-[#191F28] dark:bg-blue-600 text-white'
+                          : 'text-[#4E5968] dark:text-slate-300'
+                      }`}
+                    >
+                      Hi구독 플러스 ({hiPlusSummary.totalAccounts}구좌)
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsFreedGuideModalOpen(false)}
+                  aria-label="안내서 닫기"
+                  className="p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-[#4E5968] dark:text-slate-300 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-3 sm:p-5 overflow-y-auto overscroll-contain flex-1 min-h-0">
+              <ProposalPreviewFreedGuide
+                activeTab={effectiveFreedGuideTab}
+                guideGeneralSummary={generalHiPreed}
+                guideHiSummary={hiPlusSummary}
+                isGuideTab={true}
+                representativePeriod={subSummary.representativePeriod}
+                scale={1}
+                useMobileFluid={true}
+              />
+            </div>
+
+            <div className="px-4 py-2.5 bg-white dark:bg-[#131C2E] border-t border-[#E5E8EB] dark:border-slate-800 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsFreedGuideModalOpen(false)}
+                className="w-full min-h-[42px] py-2 px-4 rounded-xl bg-[#191F28] dark:bg-blue-600 hover:opacity-95 text-white text-xs sm:text-sm font-black cursor-pointer"
+              >
+                안내서 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 하단 고정 컨시어지 액션 독 */}
       <div className="safe-bottom-dock no-print fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-[#131C2E]/95 backdrop-blur-md border-t border-[#D1D6DB] dark:border-slate-700/80 px-3.5 sm:px-5 pt-2 shadow-[0_-4px_16px_rgba(25,31,40,0.06)]">
